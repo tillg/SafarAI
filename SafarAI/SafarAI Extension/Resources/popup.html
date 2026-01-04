@@ -30,12 +30,24 @@
 
         <!-- Chat View -->
         <div id="chat-view">
+            <!-- Page Context Banner -->
+            <div id="page-context-banner" class="page-context-banner hidden">
+                <div class="page-context-info">
+                    <span class="page-context-icon">📄</span>
+                    <span id="page-context-title" class="page-context-title"></span>
+                </div>
+                <button id="remove-context-btn" class="icon-btn-small" title="Remove page context">✕</button>
+            </div>
+
             <!-- Messages Container -->
             <div id="messages" class="messages"></div>
 
             <!-- Input Area -->
             <div class="input-area">
-                <textarea id="message-input" placeholder="Type a message..." rows="2"></textarea>
+                <div class="input-controls">
+                    <button id="include-page-btn" class="icon-btn-small" title="Toggle page content (currently enabled)">📄</button>
+                </div>
+                <textarea id="message-input" placeholder="Ask me about this page..." rows="2"></textarea>
                 <button id="send-btn" class="btn btn-primary">Send</button>
             </div>
         </div>
