@@ -170,11 +170,20 @@ async function handleSendMessage() {
     sendBtn.disabled = true;
 
     // Add loading message
+    const loadingMessageIndex = messages.length;
     addMessage('assistant', 'Thinking...');
 
-    // TODO: In Phase 2, we'll implement actual API call
-    // For now, just show a placeholder response
-    setTimeout(() => {
+    try {
+        // Send message to background script
+        console.log('Sending message to background script...');
+        const response = await browser.runtime.sendMessage({
+            action: 'chat',
+            messages: messages.slice(0, -1), // Exclude the "Thinking..." message
+            apiKey: apiKey
+        });
+
+        console.log('Response from background:', response);
+
         // Remove "Thinking..." message
         const lastMessage = messagesContainer.lastElementChild;
         if (lastMessage && lastMessage.querySelector('.message-content').textContent === 'Thinking...') {
@@ -182,14 +191,36 @@ async function handleSendMessage() {
             messages.pop();
         }
 
-        // Add mock response
-        addMessage('assistant', 'This is a placeholder response. In Phase 2, we\'ll connect to the OpenAI API to generate real responses!');
+        // Check for error
+        if (response.error) {
+            throw new Error(response.error);
+        }
 
+        // Add AI response
+        if (response.success && response.message) {
+            addMessage('assistant', response.message);
+        } else {
+            throw new Error('Invalid response from API');
+        }
+
+    } catch (error) {
+        console.error('Error sending message:', error);
+
+        // Remove "Thinking..." message
+        const lastMessage = messagesContainer.lastElementChild;
+        if (lastMessage && lastMessage.querySelector('.message-content').textContent === 'Thinking...') {
+            lastMessage.remove();
+            messages.pop();
+        }
+
+        // Show error message
+        addMessage('assistant', `❌ Error: ${error.message}`);
+    } finally {
         // Re-enable input
         messageInput.disabled = false;
         sendBtn.disabled = false;
         messageInput.focus();
-    }, 1000);
+    }
 }
 
 // Utility: Escape HTML
