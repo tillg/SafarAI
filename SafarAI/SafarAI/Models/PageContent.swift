@@ -1,0 +1,63 @@
+import Foundation
+
+struct PageContent: Codable {
+    let url: String
+    let title: String
+    let text: String
+    let description: String?
+    let siteName: String?
+    let images: [PageImage]?
+    let screenshot: String?
+
+    init(
+        url: String,
+        title: String,
+        text: String,
+        description: String? = nil,
+        siteName: String? = nil,
+        images: [PageImage]? = nil,
+        screenshot: String? = nil
+    ) {
+        self.url = url
+        self.title = title
+        self.text = text
+        self.description = description
+        self.siteName = siteName
+        self.images = images
+        self.screenshot = screenshot
+    }
+
+    init(from dictionary: [String: Any]) {
+        self.url = dictionary["url"] as? String ?? ""
+        self.title = dictionary["title"] as? String ?? ""
+        self.text = dictionary["text"] as? String ?? ""
+        self.description = dictionary["description"] as? String
+        self.siteName = dictionary["siteName"] as? String
+
+        if let imagesData = dictionary["images"] as? [[String: Any]] {
+            self.images = imagesData.compactMap { PageImage(from: $0) }
+        } else {
+            self.images = nil
+        }
+
+        self.screenshot = dictionary["screenshot"] as? String
+    }
+}
+
+struct PageImage: Codable {
+    let url: String
+    let alt: String?
+    let width: Int
+    let height: Int
+    let position: String
+    let data: String?
+
+    init(from dictionary: [String: Any]) {
+        self.url = dictionary["url"] as? String ?? ""
+        self.alt = dictionary["alt"] as? String
+        self.width = dictionary["width"] as? Int ?? 0
+        self.height = dictionary["height"] as? Int ?? 0
+        self.position = dictionary["position"] as? String ?? "inline"
+        self.data = dictionary["data"] as? String
+    }
+}

@@ -1,20 +1,145 @@
-console.log('SafarAI background script loaded');
+// SafarAI background script
 
-// Message handler
+// Native port connection
+let nativePort = null;
+
+// Establish connection to native app
+function connectToNative() {
+    try {
+        nativePort = browser.runtime.connectNative("com.grtnr.SafarAI");
+
+        nativePort.onMessage.addListener((message) => {
+            handleNativeMessage(message);
+        });
+
+        nativePort.onDisconnect.addListener(() => {
+            nativePort = null;
+            setTimeout(connectToNative, 5000);
+        });
+
+        // Send ready signal
+        browser.runtime.sendNativeMessage("com.grtnr.SafarAI", {
+            action: "extensionReady",
+            version: browser.runtime.getManifest().version
+        });
+
+    } catch (error) {
+        console.error('Failed to connect:', error.message);
+        setTimeout(connectToNative, 5000);
+    }
+}
+
+// Send message to native app
+function sendToNative(message) {
+    try {
+        browser.runtime.sendNativeMessage("com.grtnr.SafarAI", message);
+    } catch (error) {
+        console.error('Send failed:', error.message);
+    }
+}
+
+// Handle messages from native app (via port)
+function handleNativeMessage(message) {
+    const data = message.userInfo || message;
+    const action = data.action || message.name;
+
+    switch (action) {
+        case "getPageContent":
+            getPageContent(data.tabId, data.options);
+            break;
+        case "ping":
+            sendToNative({ action: "pong", timestamp: Date.now() });
+            break;
+    }
+}
+
+// Get page content from active or specific tab
+async function getPageContent(tabId = null, options = {}) {
+    try {
+        let tab;
+        if (tabId) {
+            tab = await browser.tabs.get(tabId);
+        } else {
+            const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+            tab = tabs[0];
+        }
+
+        if (!tab) {
+            throw new Error('No tab found');
+        }
+
+        const content = await browser.tabs.sendMessage(tab.id, {
+            action: "getPageContent",
+            options: options
+        });
+
+        if (!content) {
+            throw new Error('Content script not responding');
+        }
+
+        console.log('📄', content.title);
+
+        sendToNative({
+            action: "pageContent",
+            data: content,
+            tabId: tab.id,
+            timestamp: Date.now()
+        });
+
+    } catch (error) {
+        console.error('Get page content:', error.message);
+        sendToNative({
+            action: "error",
+            message: error.message,
+            code: "GET_PAGE_CONTENT_FAILED"
+        });
+    }
+}
+
+// Listen for tab changes
+browser.tabs.onActivated.addListener((activeInfo) => {
+    sendToNative({
+        action: "tabChanged",
+        tabId: activeInfo.tabId
+    });
+
+    setTimeout(() => {
+        getPageContent(activeInfo.tabId);
+    }, 500);
+});
+
+// Listen for page loads
+browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'complete') {
+        sendToNative({
+            action: "pageLoaded",
+            tabId: tabId,
+            url: tab.url,
+            title: tab.title
+        });
+
+        setTimeout(() => {
+            getPageContent(tabId);
+        }, 500);
+    }
+});
+
+// Legacy: Handle messages from popup (if popup is still used)
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('Background received message:', request);
 
     if (request.action === 'chat') {
+        // Legacy popup support - will be removed later
         handleChatRequest(request, sender)
             .then(response => sendResponse(response))
             .catch(error => sendResponse({ error: error.message }));
-        return true; // Keep the message channel open for async response
+        return true;
     }
 
     return false;
 });
 
-// Handle chat request
+// Legacy chat handler (for popup compatibility)
 async function handleChatRequest(request, sender) {
     const { messages, apiKey } = request;
 
@@ -27,7 +152,6 @@ async function handleChatRequest(request, sender) {
     }
 
     try {
-        // Call OpenAI API
         const response = await callOpenAI(apiKey, messages);
         return { success: true, message: response };
     } catch (error) {
@@ -36,11 +160,10 @@ async function handleChatRequest(request, sender) {
     }
 }
 
-// Call OpenAI API
+// Legacy OpenAI API call (for popup compatibility)
 async function callOpenAI(apiKey, messages) {
     const url = 'https://api.openai.com/v1/chat/completions';
 
-    // Format messages for OpenAI API
     const formattedMessages = messages.map(msg => ({
         role: msg.role === 'assistant' ? 'assistant' : 'user',
         content: msg.content
@@ -53,8 +176,6 @@ async function callOpenAI(apiKey, messages) {
         max_tokens: 1000
     };
 
-    console.log('Calling OpenAI API with:', requestBody);
-
     const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -66,7 +187,6 @@ async function callOpenAI(apiKey, messages) {
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('OpenAI API error:', errorData);
 
         if (response.status === 401) {
             throw new Error('Invalid API key. Please check your OpenAI API key in settings.');
@@ -80,7 +200,6 @@ async function callOpenAI(apiKey, messages) {
     }
 
     const data = await response.json();
-    console.log('OpenAI API response:', data);
 
     if (!data.choices || data.choices.length === 0) {
         throw new Error('No response from OpenAI');
@@ -88,3 +207,6 @@ async function callOpenAI(apiKey, messages) {
 
     return data.choices[0].message.content;
 }
+
+// Connect to native app on startup
+connectToNative();

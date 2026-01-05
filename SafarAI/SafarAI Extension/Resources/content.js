@@ -1,12 +1,14 @@
-console.log('SafarAI content script loaded on:', window.location.href);
-
-// Listen for requests from popup
+// Listen for requests from background script
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('Content script received message:', request);
-
     if (request.action === 'getPageContent') {
-        const content = extractPageContent();
-        sendResponse(content);
+        try {
+            const content = extractPageContent();
+            console.log('📄', content.title);
+            sendResponse(content);
+        } catch (error) {
+            console.error('Extract failed:', error.message);
+            sendResponse(null);
+        }
         return true;
     }
 

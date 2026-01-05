@@ -2,7 +2,7 @@
 
 A Safari Web Extension that makes the browser AIntelligent.
 
-# Features
+## Features
 
 - Summarize content of open page
 - Ask questions about content of open page
@@ -12,3 +12,14 @@ A Safari Web Extension that makes the browser AIntelligent.
   - OpenAI-based API, from other LLMs
   - Local LLM of macOS
 
+
+## TODO
+
+* Make setup super-easy
+* Allow user to control which pages are seen/read while talking to the AI. 
+* Provide buttons for standard-actions:
+  * Summarize page
+  * ELI5
+* Persist chat history
+* Allow for custom LLMs 
+* 
