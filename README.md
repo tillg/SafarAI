@@ -22,4 +22,4 @@ A Safari Web Extension that makes the browser AIntelligent.
   * ELI5
 * Persist chat history
 * Allow for custom LLMs 
-* 
+* Keep trak of what I & SafarAI did in the browser. Imagine a cross browser-tab history.
