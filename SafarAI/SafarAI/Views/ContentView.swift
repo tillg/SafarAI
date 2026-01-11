@@ -9,49 +9,61 @@ struct ContentView: View {
     @Environment(AIService.self) private var aiService
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            headerView
+        HStack(spacing: 0) {
+            // Main chat area
+            VStack(spacing: 0) {
+                // Header
+                headerView
 
-            // Page context banner
-            if let page = extensionService.pageContent {
-                pageContextBanner(page)
-            }
+                // Page context banner
+                if let page = extensionService.pageContent {
+                    pageContextBanner(page)
+                }
 
-            Divider()
+                Divider()
 
-            // Messages
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        if messages.isEmpty {
-                            emptyStateView
-                        } else {
-                            ForEach(messages) { message in
-                                MessageView(message: message)
-                                    .id(message.id)
+                // Messages
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            if messages.isEmpty {
+                                emptyStateView
+                            } else {
+                                ForEach(messages) { message in
+                                    MessageView(message: message)
+                                        .id(message.id)
+                                }
+                            }
+
+                            if isLoading {
+                                loadingView
                             }
                         }
+                        .padding()
+                    }
+                    .onChange(of: messages.count) { _, _ in
+                        if let lastMessage = messages.last {
+                            withAnimation {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            }
+                        }
+                    }
+                }
 
-                        if isLoading {
-                            loadingView
-                        }
-                    }
-                    .padding()
-                }
-                .onChange(of: messages.count) { _, _ in
-                    if let lastMessage = messages.last {
-                        withAnimation {
-                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                        }
-                    }
-                }
+                Divider()
+
+                // Input
+                inputView
             }
 
             Divider()
 
-            // Input
-            inputView
+            // Event timeline on the right
+            EventTimelineView(
+                events: extensionService.events,
+                eventsLogURL: extensionService.eventsLogURL
+            )
+            .frame(width: 250)
         }
         .onAppear {
             extensionService.requestPageContent()
@@ -137,28 +149,101 @@ struct ContentView: View {
     }
 
     private var inputView: some View {
-        HStack(spacing: 8) {
-            TextField("Ask me anything...", text: $input, axis: .vertical)
-                .textFieldStyle(.plain)
-                .padding(8)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(.rect(cornerRadius: 8))
-                .lineLimit(1...5)
-                .onSubmit {
+        VStack(spacing: 8) {
+            // Page context status indicator
+            pageContextIndicator
+
+            HStack(spacing: 8) {
+                TextField("Ask me anything...", text: $input, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .padding(8)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .clipShape(.rect(cornerRadius: 8))
+                    .lineLimit(1...5)
+                    .onSubmit {
+                        sendMessage()
+                    }
+
+                Button("Send", systemImage: "arrow.up.circle.fill") {
                     sendMessage()
                 }
-
-            Button("Send", systemImage: "arrow.up.circle.fill") {
-                sendMessage()
+                .buttonStyle(.plain)
+                .font(.title2)
+                .foregroundStyle(input.isEmpty ? .secondary : Color.blue)
+                .disabled(input.isEmpty || isLoading)
+                .help("Send message")
             }
-            .buttonStyle(.plain)
-            .font(.title2)
-            .foregroundStyle(input.isEmpty ? .secondary : Color.blue)
-            .disabled(input.isEmpty || isLoading)
-            .help("Send message")
         }
         .padding()
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var pageContextIndicator: some View {
+        Group {
+            if let content = extensionService.pageContent {
+                // Page context available
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.caption)
+
+                    Text("Page context available")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Text("\(content.text.count) chars")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.green.opacity(0.1))
+                .clipShape(.rect(cornerRadius: 6))
+            } else if extensionService.currentTabUrl != nil {
+                // Tab is open but content extraction failed
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.caption)
+
+                    Text("Page context unavailable (content script failed)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Button {
+                        extensionService.requestPageContent()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Retry content extraction")
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.orange.opacity(0.1))
+                .clipShape(.rect(cornerRadius: 6))
+            } else {
+                // No tab
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+
+                    Text("No page loaded")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(.rect(cornerRadius: 6))
+            }
+        }
     }
 
     private var loadingView: some View {
@@ -178,6 +263,44 @@ struct ContentView: View {
 
         let userMessage = Message(role: .user, content: input)
         messages.append(userMessage)
+
+        // Capture page context snapshot for logging
+        let pageContextSnapshot: String?
+        if let content = extensionService.pageContent {
+            print("✅ Page content available: \(content.title)")
+            pageContextSnapshot = """
+            [Page Context]
+            Title: \(content.title)
+            URL: \(content.url)
+            \(content.description.map { "Description: \($0)\n" } ?? "")Content: \(content.text)
+            """
+        } else {
+            print("❌ No page content available when sending query")
+            print("   Current tab URL: \(extensionService.currentTabUrl ?? "nil")")
+            print("   Current tab title: \(extensionService.currentTabTitle ?? "nil")")
+            pageContextSnapshot = nil
+        }
+
+        // Build full prompt as it will be sent to LLM
+        let fullPrompt: String
+        if let context = pageContextSnapshot {
+            fullPrompt = """
+            \(context)
+
+            [User Question]
+            \(input)
+            """
+        } else {
+            fullPrompt = input
+        }
+
+        // Log AI query event with full context
+        extensionService.logAIQuery(
+            userMessage: input,
+            fullPrompt: fullPrompt,
+            pageContextSnapshot: pageContextSnapshot
+        )
+
         input = ""
         isLoading = true
 
@@ -192,6 +315,12 @@ struct ContentView: View {
             if let response = response {
                 let aiMessage = Message(role: .assistant, content: response)
                 messages.append(aiMessage)
+
+                // Log AI response event
+                extensionService.logAIResponse(
+                    responseLength: response.count,
+                    model: "\(aiService.provider.rawValue)/\(aiService.model)"
+                )
             }
         }
     }

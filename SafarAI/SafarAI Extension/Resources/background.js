@@ -32,6 +32,7 @@ function connectToNative() {
 // Send message to native app
 function sendToNative(message) {
     try {
+        console.log('📤 Sending to native:', message.action);
         browser.runtime.sendNativeMessage("com.grtnr.SafarAI", message);
     } catch (error) {
         console.error('Send failed:', error.message);
@@ -53,6 +54,30 @@ function handleNativeMessage(message) {
     }
 }
 
+// Check if content script is available
+async function isContentScriptReady(tabId) {
+    try {
+        // Try to send a message and wait for response
+        const response = await Promise.race([
+            browser.tabs.sendMessage(tabId, { action: "ping" }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1000))
+        ]);
+
+        console.log('🏓 Ping response from tab', tabId, ':', response);
+
+        // Check if we got a valid response
+        if (response && typeof response === 'object' && response.ready === true) {
+            return true;
+        }
+
+        console.log('⚠️ Invalid ping response:', response);
+        return false;
+    } catch (error) {
+        console.log('❌ Ping failed for tab', tabId, ':', error.message);
+        return false;
+    }
+}
+
 // Get page content from active or specific tab
 async function getPageContent(tabId = null, options = {}) {
     try {
@@ -68,6 +93,17 @@ async function getPageContent(tabId = null, options = {}) {
             throw new Error('No tab found');
         }
 
+        // Skip restricted pages where content scripts can't run
+        if (!tab.url ||
+            tab.url.startsWith('about:') ||
+            tab.url.startsWith('chrome:') ||
+            tab.url.startsWith('safari:') ||
+            tab.url.startsWith('safari-extension:')) {
+            console.log('⏭️ Skipping restricted page:', tab.url);
+            return;
+        }
+
+        // Try to get content directly (skip ping check - Safari has messaging issues)
         const content = await browser.tabs.sendMessage(tab.id, {
             action: "getPageContent",
             options: options
@@ -87,46 +123,138 @@ async function getPageContent(tabId = null, options = {}) {
         });
 
     } catch (error) {
-        console.error('Get page content:', error.message);
-        sendToNative({
-            action: "error",
-            message: error.message,
-            code: "GET_PAGE_CONTENT_FAILED"
-        });
+        // Content script not available or failed - this is normal for some pages
+        console.log('⏭️ Could not get page content for tab', tabId, ':', error.message);
     }
 }
 
 // Listen for tab changes
-browser.tabs.onActivated.addListener((activeInfo) => {
+browser.tabs.onActivated.addListener(async (activeInfo) => {
+    // Get tab info to include in event
+    const tab = await browser.tabs.get(activeInfo.tabId);
+
+    // Build details object without null values
+    const details = {};
+    if (activeInfo.previousTabId) {
+        details.previousTabId = activeInfo.previousTabId.toString();
+    }
+
+    const event = {
+        type: "tab_switch",
+        timestamp: Date.now(),
+        tabId: activeInfo.tabId,
+        url: tab.url,
+        title: tab.title,
+        details: details
+    };
+
+    console.log('🔄 Tab switch event:', event);
+
     sendToNative({
-        action: "tabChanged",
-        tabId: activeInfo.tabId
+        action: "browserEvent",
+        event: event
     });
 
+    // Delay page content fetch so browserEvent has time to be processed
     setTimeout(() => {
-        getPageContent(activeInfo.tabId);
-    }, 500);
+        // Legacy support - send old format
+        sendToNative({
+            action: "tabChanged",
+            tabId: activeInfo.tabId
+        });
+
+        // Only try to get content if page is completely loaded
+        if (tab.status === 'complete') {
+            getPageContent(activeInfo.tabId);
+        } else {
+            console.log('⏳ Tab still loading, will get content when complete');
+        }
+    }, 200);
 });
 
 // Listen for page loads
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete') {
+        console.log('🔗 Page load event:', { tabId, url: tab.url, title: tab.title });
+
         sendToNative({
-            action: "pageLoaded",
-            tabId: tabId,
-            url: tab.url,
-            title: tab.title
+            action: "browserEvent",
+            event: {
+                type: "page_load",
+                timestamp: Date.now(),
+                tabId: tabId,
+                url: tab.url || "",
+                title: tab.title || "",
+                details: {}
+            }
         });
 
+        // Delay legacy messages so browserEvent has time to be processed
         setTimeout(() => {
+            // Legacy support - send old format
+            sendToNative({
+                action: "pageLoaded",
+                tabId: tabId,
+                url: tab.url,
+                title: tab.title
+            });
+
             getPageContent(tabId);
-        }, 500);
+        }, 200);
     }
 });
 
-// Legacy: Handle messages from popup (if popup is still used)
+// Listen for tab creation
+browser.tabs.onCreated.addListener((tab) => {
+    console.log('➕ Tab open event:', { tabId: tab.id, url: tab.url, title: tab.title });
+
+    sendToNative({
+        action: "browserEvent",
+        event: {
+            type: "tab_open",
+            timestamp: Date.now(),
+            tabId: tab.id,
+            url: tab.url || tab.pendingUrl || "",
+            title: tab.title || "New Tab",
+            details: {}
+        }
+    });
+});
+
+// Listen for tab closure
+browser.tabs.onRemoved.addListener((tabId, removeInfo) => {
+    const details = {};
+    if (removeInfo.isWindowClosing !== undefined) {
+        details.windowClosing = removeInfo.isWindowClosing.toString();
+    }
+
+    console.log('➖ Tab close event:', { tabId, details });
+
+    sendToNative({
+        action: "browserEvent",
+        event: {
+            type: "tab_close",
+            timestamp: Date.now(),
+            tabId: tabId,
+            url: "",
+            title: "",
+            details: details
+        }
+    });
+});
+
+// Handle messages from content scripts and popup
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('Background received message:', request);
+
+    if (request.action === 'linkClicked') {
+        // Forward link click event to native app
+        sendToNative({
+            action: "browserEvent",
+            event: request.event
+        });
+        return false;
+    }
 
     if (request.action === 'chat') {
         // Legacy popup support - will be removed later

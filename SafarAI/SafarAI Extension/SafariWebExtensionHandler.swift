@@ -25,8 +25,13 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
            let shared = UserDefaults(suiteName: "group.com.grtnr.SafarAI"),
            let messageData = try? JSONSerialization.data(withJSONObject: messageDict) {
 
+            let action = messageDict["action"] as? String ?? "unknown"
+            os_log("📨 Handler received: %{public}@", log: OSLog.default, type: .info, action)
+
             shared.set(messageData, forKey: "lastMessage")
             shared.set(Date().timeIntervalSince1970, forKey: "lastMessageTimestamp")
+        } else {
+            os_log("⚠️ Handler failed to process message", log: OSLog.default, type: .error)
         }
 
         // Send acknowledgment

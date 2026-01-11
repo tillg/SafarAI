@@ -22,7 +22,9 @@
     "content_scripts": [{
         "js": [ "content.js" ],
         "matches": [ "<all_urls>" ],
-        "run_at": "document_idle"
+        "match_about_blank": false,
+        "run_at": "document_idle",
+        "all_frames": false
     }],
 
     "action": {

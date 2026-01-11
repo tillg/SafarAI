@@ -1,5 +1,15 @@
 // Listen for requests from background script
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log('Content script received:', request.action);
+
+    if (request.action === 'ping') {
+        // Respond to ping to indicate content script is ready
+        const response = { ready: true };
+        console.log('Sending ping response:', response);
+        sendResponse(response);
+        return true; // Keep channel open for async response
+    }
+
     if (request.action === 'getPageContent') {
         try {
             const content = extractPageContent();
@@ -14,6 +24,9 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     return false;
 });
+
+// Log that content script loaded
+console.log('✅ SafarAI content script loaded');
 
 // Extract page content
 function extractPageContent() {
@@ -134,3 +147,26 @@ function cleanText(text) {
         .replace(/\n+/g, '\n') // Normalize line breaks
         .trim();
 }
+
+// Listen for link clicks
+document.addEventListener('click', (event) => {
+    // Find the closest anchor element
+    const link = event.target.closest('a');
+
+    if (link && link.href) {
+        // Send link click event to background script
+        browser.runtime.sendMessage({
+            action: 'linkClicked',
+            event: {
+                type: 'link_click',
+                timestamp: Date.now(),
+                url: link.href,
+                title: link.textContent.trim() || link.title || link.href,
+                details: {
+                    currentUrl: window.location.href,
+                    opensInNewTab: link.target === '_blank'
+                }
+            }
+        });
+    }
+}, true); // Use capture phase to catch clicks before they navigate
