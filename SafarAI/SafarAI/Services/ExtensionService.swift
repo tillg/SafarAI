@@ -79,7 +79,18 @@ final class ExtensionService {
                     addEvent(event)
 
                     // Update current tab info from browser events
-                    if event.type == .tabSwitch || event.type == .pageLoad {
+                    if event.type == .tabSwitch {
+                        if let tabId = event.tabId {
+                            currentTabId = tabId
+                        }
+                        currentTabUrl = event.url
+                        currentTabTitle = event.title
+
+                        // Clear old page content when switching tabs
+                        // It will be refreshed when content script responds
+                        pageContent = nil
+                        log("⚠️ Tab switched - page content cleared, waiting for refresh")
+                    } else if event.type == .pageLoad {
                         if let tabId = event.tabId {
                             currentTabId = tabId
                         }
@@ -122,9 +133,27 @@ final class ExtensionService {
     }
 
     private func saveEventToLog(_ event: BrowserEvent) {
-        let logLine = event.logFormat + "\n"
+        // Convert event to JSON
+        let eventDict: [String: Any] = [
+            "id": event.id.uuidString,
+            "timestamp": ISO8601DateFormatter().string(from: event.timestamp),
+            "type": event.type.rawValue,
+            "tabId": event.tabId as Any,
+            "url": event.url as Any,
+            "title": event.title as Any,
+            "details": event.details
+        ]
 
-        if let data = logLine.data(using: .utf8) {
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: eventDict),
+              var jsonString = String(data: jsonData, encoding: .utf8) else {
+            logError("Failed to serialize event to JSON")
+            return
+        }
+
+        // JSON Lines format: one JSON object per line
+        jsonString += "\n"
+
+        if let data = jsonString.data(using: .utf8) {
             if FileManager.default.fileExists(atPath: eventsLogURL.path) {
                 // Append to existing file
                 if let fileHandle = try? FileHandle(forWritingTo: eventsLogURL) {
@@ -140,16 +169,43 @@ final class ExtensionService {
     }
 
     private func loadRecentEvents() {
-        // Load last 100 events from log file on startup
+        // Load last 100 events from JSON log file on startup
         guard FileManager.default.fileExists(atPath: eventsLogURL.path),
               let content = try? String(contentsOf: eventsLogURL, encoding: .utf8) else {
+            log("📋 No events log file found")
             return
         }
 
-        let lines = content.components(separatedBy: .newlines)
-        let recentLines = Array(lines.suffix(100)).filter { !$0.isEmpty }
+        let lines = content.components(separatedBy: .newlines).filter { !$0.isEmpty }
+        let recentLines = Array(lines.suffix(100))
 
-        log("📋 Loaded \(recentLines.count) recent events from log")
+        var loadedEvents: [BrowserEvent] = []
+
+        for line in recentLines {
+            guard let jsonData = line.data(using: .utf8),
+                  let eventDict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                  let typeString = eventDict["type"] as? String,
+                  let type = BrowserEvent.EventType(rawValue: typeString),
+                  let timestampString = eventDict["timestamp"] as? String,
+                  let timestamp = ISO8601DateFormatter().date(from: timestampString) else {
+                continue
+            }
+
+            let event = BrowserEvent(
+                id: UUID(uuidString: eventDict["id"] as? String ?? "") ?? UUID(),
+                timestamp: timestamp,
+                type: type,
+                tabId: eventDict["tabId"] as? Int,
+                url: eventDict["url"] as? String,
+                title: eventDict["title"] as? String,
+                details: eventDict["details"] as? [String: String] ?? [:]
+            )
+
+            loadedEvents.append(event)
+        }
+
+        events = loadedEvents
+        log("📋 Loaded \(events.count) events from JSON log")
     }
 
     func requestPageContent(options: [String: Any]? = nil) {
@@ -209,6 +265,44 @@ final class ExtensionService {
             ]
         )
         addEvent(event)
+    }
+
+    func logToolCall(name: String, arguments: String) {
+        let event = BrowserEvent(
+            timestamp: Date(),
+            type: .toolCall,
+            tabId: currentTabId,
+            url: currentTabUrl,
+            title: name,
+            details: [
+                "toolName": name,
+                "arguments": arguments
+            ]
+        )
+        addEvent(event)
+    }
+
+    func logToolResult(name: String, result: String, duration: TimeInterval) {
+        let event = BrowserEvent(
+            timestamp: Date(),
+            type: .toolResult,
+            tabId: currentTabId,
+            url: currentTabUrl,
+            title: name,
+            details: [
+                "toolName": name,
+                "result": result,
+                "duration": String(format: "%.2f", duration)
+            ]
+        )
+        addEvent(event)
+    }
+
+    func requestOpenTab(url: String) {
+        sendMessage([
+            "action": "openTab",
+            "url": url
+        ])
     }
 
     private func sendMessage(_ userInfo: [String: Any]) {

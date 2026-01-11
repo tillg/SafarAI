@@ -17,8 +17,10 @@ struct BrowserEvent: Identifiable, Codable {
         case linkClick = "link_click"
         case aiQuery = "ai_query"
         case aiResponse = "ai_response"
+        case toolCall = "tool_call"
+        case toolResult = "tool_result"
 
-        var icon: String {
+        func icon(isError: Bool = false) -> String {
             switch self {
             case .tabSwitch: return "🔄"
             case .tabOpen: return "➕"
@@ -27,6 +29,8 @@ struct BrowserEvent: Identifiable, Codable {
             case .linkClick: return "🔗"
             case .aiQuery: return "💬"
             case .aiResponse: return "🤖"
+            case .toolCall: return "🔧"
+            case .toolResult: return isError ? "❌" : "✅"
             }
         }
 
@@ -39,6 +43,8 @@ struct BrowserEvent: Identifiable, Codable {
             case .linkClick: return "Link Clicked"
             case .aiQuery: return "AI Query"
             case .aiResponse: return "AI Response"
+            case .toolCall: return "Tool Call"
+            case .toolResult: return "Tool Result"
             }
         }
     }
@@ -95,31 +101,4 @@ struct BrowserEvent: Identifiable, Codable {
         }
     }
 
-    // Format for log file
-    var logFormat: String {
-        let timeFormatter = DateFormatter()
-        timeFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        let timeString = timeFormatter.string(from: timestamp)
-
-        var parts = ["\(timeString) [\(type.displayName)]"]
-
-        if let title = title, !title.isEmpty {
-            parts.append(title)
-        }
-
-        if let url = url, !url.isEmpty {
-            parts.append("(\(url))")
-        }
-
-        if let tabId = tabId {
-            parts.append("tab:\(tabId)")
-        }
-
-        if !details.isEmpty {
-            let detailsStr = details.map { "\($0)=\($1)" }.joined(separator: ", ")
-            parts.append("{\(detailsStr)}")
-        }
-
-        return parts.joined(separator: " ")
-    }
 }

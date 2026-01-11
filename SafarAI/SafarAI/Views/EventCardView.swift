@@ -10,7 +10,7 @@ struct EventCardView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header (always visible)
             HStack(spacing: 6) {
-                Text(event.type.icon)
+                Text(event.type.icon(isError: isToolError))
                     .font(.caption)
 
                 Button {
@@ -93,6 +93,9 @@ struct EventCardView: View {
                                             onShowFullPrompt: { showingFullPrompt = true }
                                         )
                                     }
+                                } else if key == "result" {
+                                    // Special handling for tool results - highlight errors
+                                    ResultRow(label: "Result", value: value, isError: isToolError)
                                 } else if key != "fullPrompt" && key != "userMessage" && key != "pageContext" {
                                     // Skip internal fields, only show user-relevant ones
                                     DetailRow(label: key.capitalized, value: value)
@@ -134,6 +137,34 @@ struct EventCardView: View {
         formatter.unitsStyle = .short
         return formatter.localizedString(for: event.timestamp, relativeTo: Date())
     }
+
+    private var isToolError: Bool {
+        // Check if this is a tool result with an error
+        guard event.type == .toolResult else { return false }
+
+        // Try to parse result as JSON and check for error field
+        if let resultString = event.details["result"],
+           let jsonData = resultString.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+
+            // Check for explicit error field
+            if json["error"] != nil {
+                return true
+            }
+
+            // Check for empty text result
+            if let text = json["text"] as? String, text.isEmpty {
+                return true
+            }
+
+            // Check for zero-length text
+            if let textLength = json["textLength"] as? Int, textLength == 0 {
+                return true
+            }
+        }
+
+        return false
+    }
 }
 
 struct DetailRow: View {
@@ -152,6 +183,29 @@ struct DetailRow: View {
                 .lineLimit(3)
 
             Spacer(minLength: 0)
+        }
+    }
+}
+
+struct ResultRow: View {
+    let label: String
+    let value: String
+    let isError: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label + ":")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.caption2)
+                .foregroundStyle(isError ? .red : Color(nsColor: .labelColor))
+                .textSelection(.enabled)
+                .padding(6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(isError ? Color.red.opacity(0.1) : Color(nsColor: .textBackgroundColor))
+                .clipShape(.rect(cornerRadius: 4))
         }
     }
 }

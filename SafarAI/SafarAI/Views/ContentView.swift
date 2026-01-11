@@ -4,6 +4,7 @@ struct ContentView: View {
     @State private var messages: [Message] = []
     @State private var input = ""
     @State private var isLoading = false
+    @State private var includePageContext = true
 
     @Environment(ExtensionService.self) private var extensionService
     @Environment(AIService.self) private var aiService
@@ -66,6 +67,11 @@ struct ContentView: View {
             .frame(width: 250)
         }
         .onAppear {
+            // Wire up tool executor
+            let executor = ToolExecutor(extensionService: extensionService)
+            aiService.setToolExecutor(executor)
+
+            // Request page content
             extensionService.requestPageContent()
         }
     }
@@ -183,13 +189,19 @@ struct ContentView: View {
             if let content = extensionService.pageContent {
                 // Page context available
                 HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.caption)
+                    Toggle(isOn: $includePageContext) {
+                        HStack(spacing: 6) {
+                            Image(systemName: includePageContext ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(includePageContext ? .green : .secondary)
+                                .font(.caption)
 
-                    Text("Page context available")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                            Text(includePageContext ? "Including page context" : "Page context disabled")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.button)
+                    .buttonStyle(.plain)
 
                     Spacer()
 
@@ -199,7 +211,7 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color.green.opacity(0.1))
+                .background((includePageContext ? Color.green : Color.gray).opacity(0.1))
                 .clipShape(.rect(cornerRadius: 6))
             } else if extensionService.currentTabUrl != nil {
                 // Tab is open but content extraction failed
@@ -264,21 +276,27 @@ struct ContentView: View {
         let userMessage = Message(role: .user, content: input)
         messages.append(userMessage)
 
-        // Capture page context snapshot for logging
+        // Capture page context snapshot for logging (only if enabled)
         let pageContextSnapshot: String?
-        if let content = extensionService.pageContent {
-            print("✅ Page content available: \(content.title)")
+        let pageContentToSend: PageContent?
+
+        if includePageContext, let content = extensionService.pageContent {
+            print("✅ Page context included: \(content.title)")
             pageContextSnapshot = """
             [Page Context]
             Title: \(content.title)
             URL: \(content.url)
             \(content.description.map { "Description: \($0)\n" } ?? "")Content: \(content.text)
             """
-        } else {
-            print("❌ No page content available when sending query")
-            print("   Current tab URL: \(extensionService.currentTabUrl ?? "nil")")
-            print("   Current tab title: \(extensionService.currentTabTitle ?? "nil")")
+            pageContentToSend = content
+        } else if !includePageContext {
+            print("⊘ Page context disabled by user")
             pageContextSnapshot = nil
+            pageContentToSend = nil
+        } else {
+            print("❌ No page content available")
+            pageContextSnapshot = nil
+            pageContentToSend = nil
         }
 
         // Build full prompt as it will be sent to LLM
@@ -307,7 +325,7 @@ struct ContentView: View {
         Task {
             let response = await aiService.chat(
                 messages: messages,
-                pageContent: extensionService.pageContent
+                pageContent: pageContentToSend // Use checkbox-controlled value
             )
 
             isLoading = false

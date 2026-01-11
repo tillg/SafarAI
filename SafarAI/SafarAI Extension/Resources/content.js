@@ -22,6 +22,52 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    // Tool: getPageStructure
+    if (request.action === 'getPageStructure') {
+        try {
+            const structure = getPageStructure();
+            sendResponse(JSON.stringify(structure));
+        } catch (error) {
+            sendResponse(JSON.stringify({ error: error.message }));
+        }
+        return true;
+    }
+
+    // Tool: getImage
+    if (request.action === 'getImage') {
+        try {
+            const selector = request.params?.selector;
+            const imageData = getImage(selector);
+            sendResponse(JSON.stringify(imageData));
+        } catch (error) {
+            sendResponse(JSON.stringify({ error: error.message }));
+        }
+        return true;
+    }
+
+    // Tool: searchOnPage
+    if (request.action === 'searchOnPage') {
+        try {
+            const query = request.params?.query;
+            const results = searchOnPage(query);
+            sendResponse(JSON.stringify(results));
+        } catch (error) {
+            sendResponse(JSON.stringify({ error: error.message }));
+        }
+        return true;
+    }
+
+    // Tool: getLinks
+    if (request.action === 'getLinks') {
+        try {
+            const links = getLinks();
+            sendResponse(JSON.stringify(links));
+        } catch (error) {
+            sendResponse(JSON.stringify({ error: error.message }));
+        }
+        return true;
+    }
+
     return false;
 });
 
@@ -170,3 +216,131 @@ document.addEventListener('click', (event) => {
         });
     }
 }, true); // Use capture phase to catch clicks before they navigate
+
+// MARK: - Tool Implementations
+
+function getPageStructure() {
+    const structure = {
+        url: window.location.href,
+        title: document.title,
+        headings: [],
+        sections: [],
+        mainContent: null
+    };
+
+    // Extract headings
+    document.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((heading, index) => {
+        structure.headings.push({
+            level: parseInt(heading.tagName[1]),
+            text: heading.textContent.trim(),
+            index: index
+        });
+    });
+
+    // Extract main sections
+    document.querySelectorAll('main, article, section').forEach((section, index) => {
+        const headingInSection = section.querySelector('h1, h2, h3, h4, h5, h6');
+        structure.sections.push({
+            type: section.tagName.toLowerCase(),
+            heading: headingInSection ? headingInSection.textContent.trim() : null,
+            textLength: section.textContent.trim().length,
+            index: index
+        });
+    });
+
+    // Identify main content
+    const main = document.querySelector('main, article, [role="main"]');
+    if (main) {
+        structure.mainContent = {
+            tag: main.tagName.toLowerCase(),
+            textLength: main.textContent.trim().length
+        };
+    }
+
+    return structure;
+}
+
+function getImage(selector) {
+    if (!selector) {
+        throw new Error('Selector required');
+    }
+
+    const img = document.querySelector(selector);
+
+    if (!img || img.tagName !== 'IMG') {
+        throw new Error('No image found with selector: ' + selector);
+    }
+
+    return {
+        url: img.src,
+        alt: img.alt || '',
+        width: img.naturalWidth || img.width,
+        height: img.naturalHeight || img.height,
+        selector: selector
+    };
+}
+
+function searchOnPage(query) {
+    if (!query) {
+        throw new Error('Query required');
+    }
+
+    const results = [];
+    const bodyText = document.body.innerText;
+    const lowerQuery = query.toLowerCase();
+    const lowerText = bodyText.toLowerCase();
+
+    let index = 0;
+    let position = lowerText.indexOf(lowerQuery, index);
+
+    while (position !== -1 && results.length < 10) {
+        // Get context around match (50 chars before and after)
+        const start = Math.max(0, position - 50);
+        const end = Math.min(bodyText.length, position + query.length + 50);
+        const context = bodyText.substring(start, end);
+
+        results.push({
+            match: bodyText.substring(position, position + query.length),
+            context: '...' + context + '...',
+            position: position
+        });
+
+        index = position + query.length;
+        position = lowerText.indexOf(lowerQuery, index);
+    }
+
+    return {
+        query: query,
+        totalMatches: results.length,
+        results: results
+    };
+}
+
+function getLinks() {
+    const links = [];
+    const seen = new Set();
+
+    document.querySelectorAll('a[href]').forEach((link) => {
+        const href = link.href;
+
+        // Skip duplicates and non-http links
+        if (seen.has(href) || (!href.startsWith('http://') && !href.startsWith('https://'))) {
+            return;
+        }
+
+        seen.add(href);
+
+        if (links.length < 100) { // Limit to 100 links
+            links.push({
+                url: href,
+                text: link.textContent.trim() || link.title || href,
+                title: link.title || ''
+            });
+        }
+    });
+
+    return {
+        totalLinks: links.length,
+        links: links
+    };
+}

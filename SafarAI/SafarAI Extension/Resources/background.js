@@ -51,6 +51,11 @@ function handleNativeMessage(message) {
         case "ping":
             sendToNative({ action: "pong", timestamp: Date.now() });
             break;
+        case "openTab":
+            if (data.url) {
+                browser.tabs.create({ url: data.url });
+            }
+            break;
     }
 }
 
@@ -78,8 +83,11 @@ async function isContentScriptReady(tabId) {
     }
 }
 
+// Track which tabs we've successfully extracted content from
+const contentExtractedTabs = new Set();
+
 // Get page content from active or specific tab
-async function getPageContent(tabId = null, options = {}) {
+async function getPageContent(tabId = null, options = {}, skipIfAlreadyExtracted = false) {
     try {
         let tab;
         if (tabId) {
@@ -91,6 +99,12 @@ async function getPageContent(tabId = null, options = {}) {
 
         if (!tab) {
             throw new Error('No tab found');
+        }
+
+        // Skip if we already extracted content for this tab
+        if (skipIfAlreadyExtracted && contentExtractedTabs.has(tab.id)) {
+            console.log('✓ Already extracted content for tab', tab.id);
+            return;
         }
 
         // Skip restricted pages where content scripts can't run
@@ -115,6 +129,9 @@ async function getPageContent(tabId = null, options = {}) {
 
         console.log('📄', content.title);
 
+        // Mark this tab as extracted
+        contentExtractedTabs.add(tab.id);
+
         sendToNative({
             action: "pageContent",
             data: content,
@@ -127,6 +144,11 @@ async function getPageContent(tabId = null, options = {}) {
         console.log('⏭️ Could not get page content for tab', tabId, ':', error.message);
     }
 }
+
+// Clear content extraction tracking when tab is closed
+browser.tabs.onRemoved.addListener((tabId) => {
+    contentExtractedTabs.delete(tabId);
+});
 
 // Listen for tab changes
 browser.tabs.onActivated.addListener(async (activeInfo) => {
@@ -165,7 +187,10 @@ browser.tabs.onActivated.addListener(async (activeInfo) => {
 
         // Only try to get content if page is completely loaded
         if (tab.status === 'complete') {
-            getPageContent(activeInfo.tabId);
+            // Try with increasing delays, but skip if already extracted
+            setTimeout(() => getPageContent(activeInfo.tabId, {}, true), 100);
+            setTimeout(() => getPageContent(activeInfo.tabId, {}, true), 500);
+            setTimeout(() => getPageContent(activeInfo.tabId, {}, true), 1000);
         } else {
             console.log('⏳ Tab still loading, will get content when complete');
         }

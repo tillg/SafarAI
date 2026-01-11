@@ -27,11 +27,6 @@
         "all_frames": false
     }],
 
-    "action": {
-        "default_popup": "popup.html",
-        "default_icon": "images/toolbar-icon.svg"
-    },
-
     "permissions": [
         "storage",
         "activeTab",
