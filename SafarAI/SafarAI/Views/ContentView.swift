@@ -281,7 +281,6 @@ struct ContentView: View {
         let pageContentToSend: PageContent?
 
         if includePageContext, let content = extensionService.pageContent {
-            print("✅ Page context included: \(content.title)")
             pageContextSnapshot = """
             [Page Context]
             Title: \(content.title)
@@ -290,11 +289,9 @@ struct ContentView: View {
             """
             pageContentToSend = content
         } else if !includePageContext {
-            print("⊘ Page context disabled by user")
             pageContextSnapshot = nil
             pageContentToSend = nil
         } else {
-            print("❌ No page content available")
             pageContextSnapshot = nil
             pageContentToSend = nil
         }

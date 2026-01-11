@@ -64,7 +64,6 @@ struct BrowserEvent: Identifiable, Codable {
         guard let typeString = data["type"] as? String,
               let type = EventType(rawValue: typeString),
               let timestampMs = data["timestamp"] as? Double else {
-            print("❌ BrowserEvent init failed: type=\(data["type"] ?? "nil"), timestamp=\(data["timestamp"] ?? "nil")")
             return nil
         }
 

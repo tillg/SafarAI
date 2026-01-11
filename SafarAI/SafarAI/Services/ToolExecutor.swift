@@ -106,7 +106,8 @@ class ToolExecutor {
     }
 
     private func searchOnPage(arguments: String) async -> String {
-        guard let args = try? JSONSerialization.jsonObject(with: arguments.data(using: .utf8)!) as? [String: Any],
+        guard let argsData = arguments.data(using: .utf8),
+              let args = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any],
               let query = args["query"] as? String else {
             return jsonError("Invalid arguments: query required")
         }
@@ -135,7 +136,8 @@ class ToolExecutor {
     }
 
     private func openInNewTab(arguments: String) async -> String {
-        guard let args = try? JSONSerialization.jsonObject(with: arguments.data(using: .utf8)!) as? [String: Any],
+        guard let argsData = arguments.data(using: .utf8),
+              let args = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any],
               let urlString = args["url"] as? String,
               let url = URL(string: urlString) else {
             return jsonError("Invalid arguments: valid url required")
