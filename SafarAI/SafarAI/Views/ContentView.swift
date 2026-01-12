@@ -285,7 +285,8 @@ struct ContentView: View {
             [Page Context]
             Title: \(content.title)
             URL: \(content.url)
-            \(content.description.map { "Description: \($0)\n" } ?? "")Content: \(content.text)
+            \(content.description.map { "Description: \($0)\n" } ?? "")Content:
+            \(content.contentForLLM)
             """
             pageContentToSend = content
         } else if !includePageContext {

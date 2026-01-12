@@ -16,6 +16,7 @@ final class ExtensionService {
     private var observer: NSObjectProtocol?
     private var lastMessageTimestamp: TimeInterval = 0
     private var pollTimer: Timer?
+    private let markdownConverter = MarkdownConverter()
 
     init() {
         // Set up events log file path
@@ -70,7 +71,32 @@ final class ExtensionService {
         switch action {
         case "pageContent":
             if let contentData = data["data"] as? [String: Any] {
-                pageContent = PageContent(from: contentData)
+                var content = PageContent(from: contentData)
+
+                log("📄 Received page content: html=\(content.html?.count ?? 0) chars, text=\(content.text.count) chars")
+
+                // Convert HTML to Markdown if HTML is available
+                if let html = content.html, !html.isEmpty {
+                    log("🔄 Converting HTML to Markdown...")
+                    let markdown = markdownConverter.convertToMarkdown(html: html, fallbackText: content.text)
+
+                    // Create new PageContent with markdown
+                    content = PageContent(
+                        url: content.url,
+                        title: content.title,
+                        html: content.html,
+                        markdown: markdown,
+                        text: content.text,
+                        description: content.description,
+                        siteName: content.siteName,
+                        images: content.images,
+                        screenshot: content.screenshot
+                    )
+                } else {
+                    log("⚠️ No HTML available for Markdown conversion")
+                }
+
+                pageContent = content
                 log("📄 Page: \(pageContent?.title ?? "unknown")")
             }
         case "browserEvent":

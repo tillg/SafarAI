@@ -62,7 +62,8 @@ final class AIService {
             Title: \(content.title)
             URL: \(content.url)
             \(content.description.map { "Description: \($0)\n" } ?? "")
-            Content: \(content.text)
+            Content:
+            \(content.contentForLLM)
 
             [User Question]
             \(userContent)

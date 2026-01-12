@@ -66,17 +66,21 @@ class ToolExecutor {
             return jsonError("No page content available")
         }
 
+        // Use contentForLLM which prefers markdown over plain text
+        let contentText = content.contentForLLM
+
         // Check if text is empty or too short
-        if content.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if contentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return jsonError("Page text is empty - content script may have failed")
         }
 
         let result: [String: Any] = [
             "url": content.url,
             "title": content.title,
-            "text": content.text,
+            "text": contentText, // Now uses Markdown if available
+            "format": content.markdown != nil ? "markdown" : "plaintext",
             "description": content.description ?? "",
-            "textLength": content.text.count
+            "textLength": contentText.count
         ]
 
         return jsonEncode(result)

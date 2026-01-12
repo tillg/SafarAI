@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		F91258F02F0ACB4C005EAFC2 /* SafarAI Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F91258EF2F0ACB4C005EAFC2 /* SafarAI Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F92B06732F14CEEE00CB460F /* SwiftHTMLtoMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = F92B06722F14CEEE00CB460F /* SwiftHTMLtoMarkdown */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +75,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F92B06732F14CEEE00CB460F /* SwiftHTMLtoMarkdown in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -127,6 +129,7 @@
 			);
 			name = SafarAI;
 			packageProductDependencies = (
+				F92B06722F14CEEE00CB460F /* SwiftHTMLtoMarkdown */,
 			);
 			productName = SafarAI;
 			productReference = F91258D52F0ACB4B005EAFC2 /* SafarAI.app */;
@@ -181,6 +184,9 @@
 			);
 			mainGroup = F91258CC2F0ACB4B005EAFC2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F92B06712F14CEEE00CB460F /* XCRemoteSwiftPackageReference "SwiftHTMLtoMarkdown" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F91258D62F0ACB4B005EAFC2 /* Products */;
 			projectDirPath = "";
@@ -550,6 +556,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F92B06712F14CEEE00CB460F /* XCRemoteSwiftPackageReference "SwiftHTMLtoMarkdown" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ActuallyTaylor/SwiftHTMLtoMarkdown";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.1.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F92B06722F14CEEE00CB460F /* SwiftHTMLtoMarkdown */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F92B06712F14CEEE00CB460F /* XCRemoteSwiftPackageReference "SwiftHTMLtoMarkdown" */;
+			productName = SwiftHTMLtoMarkdown;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F91258CD2F0ACB4B005EAFC2 /* Project object */;
 }

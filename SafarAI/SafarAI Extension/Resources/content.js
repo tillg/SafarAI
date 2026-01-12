@@ -79,6 +79,7 @@ function extractPageContent() {
     const content = {
         url: window.location.href,
         title: document.title,
+        html: '',
         text: '',
         description: '',
         siteName: ''
@@ -96,7 +97,10 @@ function extractPageContent() {
         content.siteName = ogSiteName.getAttribute('content') || '';
     }
 
-    // Get main content text
+    // Get rendered HTML (after JavaScript execution)
+    content.html = document.documentElement.outerHTML;
+
+    // Get main content text (fallback)
     content.text = extractMainText();
 
     // Truncate text to reasonable length (10,000 chars ~ 2,500 tokens)
@@ -107,6 +111,7 @@ function extractPageContent() {
     console.log('Extracted page content:', {
         url: content.url,
         title: content.title,
+        htmlLength: content.html.length,
         textLength: content.text.length
     });
 
