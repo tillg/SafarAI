@@ -68,6 +68,67 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    // Tool: scrollPage
+    if (request.action === 'scrollPage') {
+        try {
+            const direction = request.direction || 'down';
+            const amount = request.amount || 'page';
+
+            let scrollAmount = 0;
+            if (amount === 'page') {
+                scrollAmount = window.innerHeight;
+            } else if (typeof amount === 'number') {
+                scrollAmount = amount;
+            }
+
+            if (direction === 'down') {
+                window.scrollBy(0, scrollAmount);
+            } else if (direction === 'up') {
+                window.scrollBy(0, -scrollAmount);
+            } else if (direction === 'top') {
+                window.scrollTo(0, 0);
+            } else if (direction === 'bottom') {
+                window.scrollTo(0, document.body.scrollHeight);
+            }
+
+            sendResponse(JSON.stringify({
+                success: true,
+                scrollY: window.scrollY,
+                scrollHeight: document.body.scrollHeight
+            }));
+        } catch (error) {
+            sendResponse(JSON.stringify({ error: error.message }));
+        }
+        return true;
+    }
+
+    // Tool: clickElement
+    if (request.action === 'clickElement') {
+        try {
+            const selector = request.selector;
+            if (!selector) {
+                throw new Error('Selector is required');
+            }
+
+            const element = document.querySelector(selector);
+            if (!element) {
+                throw new Error(`Element not found: ${selector}`);
+            }
+
+            element.click();
+
+            sendResponse(JSON.stringify({
+                success: true,
+                selector: selector,
+                tagName: element.tagName.toLowerCase(),
+                text: element.textContent?.substring(0, 100)
+            }));
+        } catch (error) {
+            sendResponse(JSON.stringify({ error: error.message }));
+        }
+        return true;
+    }
+
     return false;
 });
 

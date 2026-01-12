@@ -56,6 +56,59 @@ function handleNativeMessage(message) {
                 browser.tabs.create({ url: data.url });
             }
             break;
+        case "toolCall":
+            handleToolCall(data);
+            break;
+    }
+}
+
+// Handle tool execution requests from native app
+async function handleToolCall(data) {
+    const { requestId, toolName, arguments: args } = data;
+
+    try {
+        let result;
+
+        switch (toolName) {
+            case "getTabs":
+                result = await executeTabs();
+                break;
+            case "getPageStructure":
+                result = await executePageStructure(args);
+                break;
+            case "getImage":
+                result = await executeGetImage(args);
+                break;
+            case "getLinks":
+                result = await executeGetLinks(args);
+                break;
+            case "scrollPage":
+                result = await executeScrollPage(args);
+                break;
+            case "clickElement":
+                result = await executeClickElement(args);
+                break;
+            case "getFullPageScreenshot":
+                result = await executeScreenshot(args);
+                break;
+            default:
+                throw new Error(`Unknown tool: ${toolName}`);
+        }
+
+        // Send success response
+        sendToNative({
+            action: "toolResponse",
+            requestId: requestId,
+            result: JSON.stringify(result)
+        });
+
+    } catch (error) {
+        // Send error response
+        sendToNative({
+            action: "toolResponse",
+            requestId: requestId,
+            error: error.message
+        });
     }
 }
 
@@ -359,6 +412,127 @@ async function callOpenAI(apiKey, messages) {
     }
 
     return data.choices[0].message.content;
+}
+
+// ===== Tool Implementations =====
+
+// Get all tabs in current window
+async function executeTabs() {
+    const tabs = await browser.tabs.query({ currentWindow: true });
+
+    return {
+        tabs: tabs.map(tab => ({
+            id: tab.id,
+            title: tab.title || "Untitled",
+            url: tab.url || "",
+            active: tab.active,
+            index: tab.index
+        })),
+        count: tabs.length
+    };
+}
+
+// Get page structure (headings, sections)
+async function executePageStructure(args) {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+
+    if (!tab) {
+        throw new Error("No active tab found");
+    }
+
+    const result = await browser.tabs.sendMessage(tab.id, {
+        action: "getPageStructure"
+    });
+
+    return result;
+}
+
+// Get image from page
+async function executeGetImage(args) {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+
+    if (!tab) {
+        throw new Error("No active tab found");
+    }
+
+    const result = await browser.tabs.sendMessage(tab.id, {
+        action: "getImage",
+        params: { selector: args.selector }
+    });
+
+    return result;
+}
+
+// Get links from page
+async function executeGetLinks(args) {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+
+    if (!tab) {
+        throw new Error("No active tab found");
+    }
+
+    const result = await browser.tabs.sendMessage(tab.id, {
+        action: "getLinks"
+    });
+
+    return result;
+}
+
+// Scroll page
+async function executeScrollPage(args) {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+
+    if (!tab) {
+        throw new Error("No active tab found");
+    }
+
+    const result = await browser.tabs.sendMessage(tab.id, {
+        action: "scrollPage",
+        direction: args.direction || "down",
+        amount: args.amount || "page"
+    });
+
+    return result;
+}
+
+// Click element on page
+async function executeClickElement(args) {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+
+    if (!tab) {
+        throw new Error("No active tab found");
+    }
+
+    const result = await browser.tabs.sendMessage(tab.id, {
+        action: "clickElement",
+        selector: args.selector
+    });
+
+    return result;
+}
+
+// Get full page screenshot
+async function executeScreenshot(args) {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+
+    if (!tab) {
+        throw new Error("No active tab found");
+    }
+
+    // Safari's captureVisibleTab only captures viewport
+    // For full page, we need to scroll and stitch or use content script
+    const dataUrl = await browser.tabs.captureVisibleTab({ format: args.format || "png" });
+
+    return {
+        dataUrl: dataUrl,
+        note: "Viewport only - full page stitching not yet implemented"
+    };
 }
 
 // Connect to native app on startup

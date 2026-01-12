@@ -1,6 +1,20 @@
 import SafariServices
 import Observation
 
+enum ToolError: Error {
+    case timeout(message: String)
+    case executionFailed(message: String)
+
+    var localizedDescription: String {
+        switch self {
+        case .timeout(let message):
+            return message
+        case .executionFailed(let message):
+            return message
+        }
+    }
+}
+
 @Observable
 final class ExtensionService {
     var pageContent: PageContent?
@@ -17,6 +31,10 @@ final class ExtensionService {
     private var lastMessageTimestamp: TimeInterval = 0
     private var pollTimer: Timer?
     private let markdownConverter = MarkdownConverter()
+
+    // Request/response correlation
+    private var pendingRequests: [String: CheckedContinuation<String, Error>] = [:]
+    private var requestTimeouts: [String: Task<Void, Never>] = [:]
 
     init() {
         // Set up events log file path
@@ -138,6 +156,23 @@ final class ExtensionService {
         case "error":
             if let message = data["message"] as? String {
                 logError("Extension: \(message)")
+            }
+        case "toolResponse":
+            if let requestId = data["requestId"] as? String,
+               let continuation = pendingRequests[requestId] {
+                // Cancel timeout
+                requestTimeouts[requestId]?.cancel()
+                requestTimeouts.removeValue(forKey: requestId)
+                pendingRequests.removeValue(forKey: requestId)
+
+                // Resume with result or error
+                if let error = data["error"] as? String {
+                    continuation.resume(throwing: ToolError.executionFailed(message: error))
+                } else if let result = data["result"] as? String {
+                    continuation.resume(returning: result)
+                } else {
+                    continuation.resume(throwing: ToolError.executionFailed(message: "Invalid response format"))
+                }
             }
         default:
             break
@@ -331,6 +366,42 @@ final class ExtensionService {
         ])
     }
 
+    /// Execute a tool call and wait for response
+    func executeToolCall(name: String, arguments: [String: Any] = [:], timeout: TimeInterval = 10.0) async throws -> String {
+        let requestId = UUID().uuidString
+
+        return try await withCheckedThrowingContinuation { continuation in
+            // Store continuation for when response arrives
+            pendingRequests[requestId] = continuation
+
+            // Set up timeout
+            let timeoutTask = Task {
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+
+                // Check if request is still pending
+                if pendingRequests[requestId] != nil {
+                    pendingRequests.removeValue(forKey: requestId)
+                    requestTimeouts.removeValue(forKey: requestId)
+
+                    // Log timeout error
+                    let errorMsg = "Tool '\(name)' timed out after \(timeout)s"
+                    logError(errorMsg)
+
+                    continuation.resume(throwing: ToolError.timeout(message: errorMsg))
+                }
+            }
+            requestTimeouts[requestId] = timeoutTask
+
+            // Send tool call request
+            sendMessage([
+                "action": "toolCall",
+                "requestId": requestId,
+                "toolName": name,
+                "arguments": arguments
+            ])
+        }
+    }
+
     private func sendMessage(_ userInfo: [String: Any]) {
         guard let action = userInfo["action"] as? String else { return }
 
@@ -350,6 +421,14 @@ final class ExtensionService {
         pollTimer?.invalidate()
         if let observer = observer {
             NotificationCenter.default.removeObserver(observer)
+        }
+
+        // Cancel all pending requests
+        for (_, task) in requestTimeouts {
+            task.cancel()
+        }
+        for (_, continuation) in pendingRequests {
+            continuation.resume(throwing: ToolError.executionFailed(message: "Service deinitialized"))
         }
     }
 }

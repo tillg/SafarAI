@@ -6,6 +6,7 @@ struct SettingsView: View {
 
     @State private var apiKey: String = ""
     @State private var contentExtractionDelay: Double = 1000
+    @State private var toolTimeout: Double = 10.0
 
     var body: some View {
         Form {
@@ -68,6 +69,28 @@ struct SettingsView: View {
 
                 Divider()
 
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Tool Timeout:")
+                        Spacer()
+                        Text("\(Int(toolTimeout))s")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(value: $toolTimeout, in: 1...30, step: 1)
+
+                    Text("Maximum time to wait for tool execution. Tools that take longer will show a timeout error.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Button("Save Timeout") {
+                        UserDefaults.standard.set(toolTimeout, forKey: "tool_timeout")
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+
+                Divider()
+
                 if let page = extensionService.pageContent {
                     LabeledContent("Current Page") {
                         VStack(alignment: .trailing, spacing: 2) {
@@ -101,6 +124,10 @@ struct SettingsView: View {
             contentExtractionDelay = UserDefaults.standard.double(forKey: "content_extraction_delay")
             if contentExtractionDelay == 0 {
                 contentExtractionDelay = 1000 // Default
+            }
+            toolTimeout = UserDefaults.standard.double(forKey: "tool_timeout")
+            if toolTimeout == 0 {
+                toolTimeout = 10.0 // Default
             }
         }
     }

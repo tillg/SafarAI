@@ -27,17 +27,20 @@ class ToolExecutor {
         case "getPageText":
             result = await getPageText()
 
+        case "getTabs":
+            result = await executeToolViaExtension(toolCall: toolCall)
+
         case "getPageStructure":
-            result = await getPageStructure()
+            result = await executeToolViaExtension(toolCall: toolCall)
 
         case "getImage":
-            result = await getImage(arguments: toolCall.function.arguments)
+            result = await executeToolViaExtension(toolCall: toolCall)
 
         case "searchOnPage":
             result = await searchOnPage(arguments: toolCall.function.arguments)
 
         case "getLinks":
-            result = await getLinks()
+            result = await executeToolViaExtension(toolCall: toolCall)
 
         case "openInNewTab":
             result = await openInNewTab(arguments: toolCall.function.arguments)
@@ -57,6 +60,37 @@ class ToolExecutor {
         )
 
         return result
+    }
+
+    // Execute tool via extension service (new async communication)
+    private func executeToolViaExtension(toolCall: ToolCall) async -> String {
+        guard let extensionService = extensionService else {
+            return jsonError("Extension service not available")
+        }
+
+        // Parse arguments
+        let arguments: [String: Any]
+        if let argsData = toolCall.function.arguments.data(using: .utf8),
+           let args = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] {
+            arguments = args
+        } else {
+            arguments = [:]
+        }
+
+        // Get timeout from settings
+        let timeout = UserDefaults.standard.double(forKey: "tool_timeout")
+        let actualTimeout = timeout > 0 ? timeout : 10.0
+
+        do {
+            let result = try await extensionService.executeToolCall(
+                name: toolCall.function.name,
+                arguments: arguments,
+                timeout: actualTimeout
+            )
+            return result
+        } catch {
+            return jsonError(error.localizedDescription)
+        }
     }
 
     // MARK: - Tool Implementations
@@ -86,28 +120,6 @@ class ToolExecutor {
         return jsonEncode(result)
     }
 
-    private func getPageStructure() async -> String {
-        // TODO: Implement async content script communication
-        // For now, return basic structure from page content
-        guard let content = extensionService?.pageContent else {
-            return jsonError("No page content available. Please reload the page.")
-        }
-
-        let result: [String: Any] = [
-            "url": content.url,
-            "title": content.title,
-            "description": content.description ?? "",
-            "siteName": content.siteName ?? "",
-            "note": "Full DOM structure requires page reload (async communication not yet implemented)"
-        ]
-
-        return jsonEncode(result)
-    }
-
-    private func getImage(arguments: String) async -> String {
-        // TODO: Implement content script communication
-        return jsonError("getImage tool requires async communication (not yet implemented). Please reload page.")
-    }
 
     private func searchOnPage(arguments: String) async -> String {
         guard let argsData = arguments.data(using: .utf8),
@@ -132,11 +144,6 @@ class ToolExecutor {
         ]
 
         return jsonEncode(result)
-    }
-
-    private func getLinks() async -> String {
-        // TODO: Implement content script communication
-        return jsonError("getLinks tool requires async communication (not yet implemented). Please reload page.")
     }
 
     private func openInNewTab(arguments: String) async -> String {

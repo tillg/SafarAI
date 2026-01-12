@@ -69,6 +69,7 @@ struct ToolMessage: Codable {
 extension Tool {
     static let allTools: [Tool] = [
         getPageText,
+        getTabs,
         getPageStructure,
         getImage,
         searchOnPage,
@@ -79,6 +80,15 @@ extension Tool {
     static let getPageText = Tool(function: FunctionDefinition(
         name: "getPageText",
         description: "Extract all text content from the current web page",
+        parameters: FunctionDefinition.Parameters(
+            properties: [:],
+            required: []
+        )
+    ))
+
+    static let getTabs = Tool(function: FunctionDefinition(
+        name: "getTabs",
+        description: "Get a list of all open browser tabs in the current window, including their titles, URLs, and which one is currently active",
         parameters: FunctionDefinition.Parameters(
             properties: [:],
             required: []
