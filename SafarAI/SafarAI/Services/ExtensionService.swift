@@ -129,7 +129,7 @@ final class ExtensionService {
         // Append to log file
         saveEventToLog(event)
 
-        log("\(event.type.icon) \(event.type.displayName): \(event.title ?? event.url ?? "")")
+        log("\(event.type.icon()) \(event.type.displayName): \(event.title ?? event.url ?? "")")
     }
 
     private func saveEventToLog(_ event: BrowserEvent) {
@@ -223,7 +223,7 @@ final class ExtensionService {
     func logAIQuery(userMessage: String, fullPrompt: String, pageContextSnapshot: String?) {
         // Create display prompt with [pagecontext] marker if context was included
         let displayPrompt: String
-        if let context = pageContextSnapshot {
+        if pageContextSnapshot != nil {
             displayPrompt = """
             [pagecontext]
 

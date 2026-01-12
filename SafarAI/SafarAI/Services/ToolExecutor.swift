@@ -139,7 +139,7 @@ class ToolExecutor {
         guard let argsData = arguments.data(using: .utf8),
               let args = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any],
               let urlString = args["url"] as? String,
-              let url = URL(string: urlString) else {
+              URL(string: urlString) != nil else {
             return jsonError("Invalid arguments: valid url required")
         }
 

@@ -58,6 +58,14 @@ struct EventTimelineView: View {
                         }
                         .padding(8)
                     }
+                    .onAppear {
+                        // Scroll to bottom on first load
+                        if let lastEvent = events.last {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                proxy.scrollTo(lastEvent.id, anchor: .bottom)
+                            }
+                        }
+                    }
                     .onChange(of: events.count) { _, _ in
                         // Auto-scroll to bottom when new event is added
                         if let lastEvent = events.last {
