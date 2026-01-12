@@ -74,7 +74,8 @@ extension Tool {
         getImage,
         searchOnPage,
         getLinks,
-        openInNewTab
+        openInNewTab,
+        getFullPageScreenshot
     ]
 
     static let getPageText = Tool(function: FunctionDefinition(
@@ -158,6 +159,15 @@ extension Tool {
                 )
             ],
             required: ["url"]
+        )
+    ))
+
+    static let getFullPageScreenshot = Tool(function: FunctionDefinition(
+        name: "getFullPageScreenshot",
+        description: "Captures a PNG screenshot of the currently visible viewport",
+        parameters: FunctionDefinition.Parameters(
+            properties: [:],
+            required: []
         )
     ))
 }

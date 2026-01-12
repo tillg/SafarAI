@@ -129,6 +129,19 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    // Helper: Get viewport dimensions
+    if (request.action === 'getViewportDimensions') {
+        try {
+            sendResponse({
+                width: window.innerWidth,
+                height: window.innerHeight
+            });
+        } catch (error) {
+            sendResponse({ width: 1920, height: 1080 }); // Default fallback
+        }
+        return true;
+    }
+
     return false;
 });
 

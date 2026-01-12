@@ -94,8 +94,22 @@ struct EventCardView: View {
                                         )
                                     }
                                 } else if key == "result" {
-                                    // Special handling for tool results - highlight errors
-                                    ResultRow(label: "Result", value: value, isError: isToolError)
+                                    // Check if this is a screenshot result
+                                    if isScreenshotResult(value) {
+                                        ImageResultRow(
+                                            label: "Result",
+                                            resultJson: value,
+                                            onTap: {
+                                                print("🖼️ Screenshot thumbnail tapped")
+                                                if let image = extractImageFromResult(value) {
+                                                    openScreenshotWindow(image: image)
+                                                }
+                                            }
+                                        )
+                                    } else {
+                                        // Special handling for tool results - highlight errors
+                                        ResultRow(label: "Result", value: value, isError: isToolError)
+                                    }
                                 } else if key != "fullPrompt" && key != "userMessage" && key != "pageContext" {
                                     // Skip internal fields, only show user-relevant ones
                                     DetailRow(label: key.capitalized, value: value)
@@ -165,6 +179,85 @@ struct EventCardView: View {
 
         return false
     }
+
+    private func isScreenshotResult(_ resultString: String) -> Bool {
+        guard let jsonData = resultString.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+            return false
+        }
+        return json["imageDataUrl"] != nil
+    }
+
+    private func extractImageFromResult(_ resultString: String) -> NSImage? {
+        print("🔍 extractImageFromResult called with string length: \(resultString.count)")
+
+        guard let jsonData = resultString.data(using: .utf8) else {
+            print("❌ Failed to convert string to UTF8 data")
+            return nil
+        }
+
+        print("✅ Got JSON data: \(jsonData.count) bytes")
+
+        guard let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+            print("❌ Failed to parse JSON")
+            return nil
+        }
+
+        print("✅ Parsed JSON, keys: \(json.keys.joined(separator: ", "))")
+
+        guard let dataUrl = json["imageDataUrl"] as? String else {
+            print("❌ No imageDataUrl key in JSON")
+            return nil
+        }
+
+        print("✅ Got imageDataUrl, length: \(dataUrl.count)")
+        print("🔍 imageDataUrl prefix: \(dataUrl.prefix(100))")
+
+        let result = imageFromDataURL(dataUrl)
+        print(result == nil ? "❌ imageFromDataURL returned nil" : "✅ imageFromDataURL succeeded")
+        return result
+    }
+
+    private func imageFromDataURL(_ dataUrl: String) -> NSImage? {
+        // Extract base64 data from data URL (format: data:image/png;base64,...)
+        guard let range = dataUrl.range(of: "base64,") else {
+            print("❌ No 'base64,' found in data URL")
+            return nil
+        }
+
+        let base64String = String(dataUrl[range.upperBound...])
+        print("📊 Base64 string length: \(base64String.count)")
+
+        guard let imageData = Data(base64Encoded: base64String) else {
+            print("❌ Failed to decode base64 string")
+            return nil
+        }
+
+        print("📦 Image data size: \(imageData.count) bytes")
+
+        guard let image = NSImage(data: imageData) else {
+            print("❌ Failed to create NSImage from data")
+            return nil
+        }
+
+        print("✅ NSImage created: \(image.size.width)x\(image.size.height)")
+        return image
+    }
+
+    private func openScreenshotWindow(image: NSImage) {
+        let contentView = ScreenshotWindowView(image: image)
+        let hostingController = NSHostingController(rootView: contentView)
+
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Screenshot"
+        window.setContentSize(NSSize(width: 900, height: 700))
+        window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        window.isReleasedWhenClosed = false
+
+        print("✅ Opened screenshot window")
+    }
 }
 
 struct DetailRow: View {
@@ -206,6 +299,92 @@ struct ResultRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(isError ? Color.red.opacity(0.1) : Color(nsColor: .textBackgroundColor))
                 .clipShape(.rect(cornerRadius: 4))
+        }
+    }
+}
+
+struct ImageResultRow: View {
+    let label: String
+    let resultJson: String
+    let onTap: () -> Void
+
+    private var thumbnailImage: NSImage? {
+        guard let jsonData = resultJson.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let dataUrl = json["imageDataUrl"] as? String,
+              let range = dataUrl.range(of: "base64,") else {
+            return nil
+        }
+
+        let base64String = String(dataUrl[range.upperBound...])
+
+        guard let imageData = Data(base64Encoded: base64String) else {
+            return nil
+        }
+
+        return NSImage(data: imageData)
+    }
+
+    private var imageInfo: String {
+        guard let jsonData = resultJson.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let dimensions = json["dimensions"] as? [String: Any],
+              let width = dimensions["width"] as? Int,
+              let height = dimensions["height"] as? Int else {
+            return "Screenshot"
+        }
+        return "\(width)×\(height) PNG"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label + ":")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Button {
+                onTap()
+            } label: {
+                HStack(spacing: 8) {
+                    if let image = thumbnailImage {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(height: 60)
+                            .clipShape(.rect(cornerRadius: 4))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                            )
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Screenshot captured")
+                            .font(.caption2)
+                            .foregroundStyle(.primary)
+
+                        Text(imageInfo)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+
+                        Text("Click to view full size")
+                            .font(.caption2)
+                            .foregroundStyle(.blue)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity)
+                .background(Color(nsColor: .textBackgroundColor))
+                .clipShape(.rect(cornerRadius: 4))
+            }
+            .buttonStyle(.plain)
+            .help("Click to view full size screenshot")
         }
     }
 }
@@ -367,6 +546,280 @@ struct FullPromptSheet: View {
             }
         }
         .frame(width: 600, height: 500)
+    }
+}
+
+struct ErrorView: View {
+    let message: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Error: Image not available")
+                .font(.headline)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Button("Close") {
+                dismiss()
+            }
+        }
+        .padding()
+        .frame(width: 400, height: 200)
+    }
+}
+
+struct ScreenshotWindowView: View {
+    let image: NSImage
+    @State private var scale: CGFloat = 1.0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Screenshot")
+                    .font(.headline)
+
+                Text("(\(Int(image.size.width))×\(Int(image.size.height)))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                // Zoom controls
+                HStack(spacing: 8) {
+                    Button {
+                        scale = max(0.1, scale - 0.1)
+                    } label: {
+                        Image(systemName: "minus.magnifyingglass")
+                    }
+                    .help("Zoom out")
+
+                    Text("\(Int(scale * 100))%")
+                        .font(.caption)
+                        .frame(width: 50)
+
+                    Button {
+                        scale = min(3.0, scale + 0.1)
+                    } label: {
+                        Image(systemName: "plus.magnifyingglass")
+                    }
+                    .help("Zoom in")
+
+                    Button {
+                        scale = 1.0
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .help("Reset zoom")
+                }
+            }
+            .padding()
+
+            Divider()
+
+            // Image
+            GeometryReader { geometry in
+                ScrollView([.horizontal, .vertical]) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(
+                            width: image.size.width * scale,
+                            height: image.size.height * scale
+                        )
+                        .frame(
+                            minWidth: geometry.size.width,
+                            minHeight: geometry.size.height,
+                            alignment: .center
+                        )
+                }
+            }
+        }
+    }
+}
+
+struct ScreenshotSheetFromJSON: View {
+    let jsonString: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var image: NSImage?
+    @State private var scale: CGFloat = 1.0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let image = image {
+                // Header
+                HStack {
+                    Text("Screenshot")
+                        .font(.headline)
+
+                    Text("(\(Int(image.size.width))×\(Int(image.size.height)))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    // Zoom controls
+                    HStack(spacing: 8) {
+                        Button {
+                            scale = max(0.1, scale - 0.1)
+                        } label: {
+                            Image(systemName: "minus.magnifyingglass")
+                        }
+                        .help("Zoom out")
+
+                        Text("\(Int(scale * 100))%")
+                            .font(.caption)
+                            .frame(width: 50)
+
+                        Button {
+                            scale = min(3.0, scale + 0.1)
+                        } label: {
+                            Image(systemName: "plus.magnifyingglass")
+                        }
+                        .help("Zoom in")
+
+                        Button {
+                            scale = 1.0
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .help("Reset zoom")
+                    }
+
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+                .padding()
+
+                Divider()
+
+                // Image
+                GeometryReader { geometry in
+                    ScrollView([.horizontal, .vertical]) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(
+                                width: image.size.width * scale,
+                                height: image.size.height * scale
+                            )
+                            .frame(
+                                minWidth: geometry.size.width,
+                                minHeight: geometry.size.height,
+                                alignment: .center
+                            )
+                    }
+                }
+            } else {
+                ErrorView(message: "Failed to extract image from screenshot data")
+            }
+        }
+        .frame(width: 900, height: 700)
+        .onAppear {
+            print("🎬 ScreenshotSheetFromJSON appeared, extracting image...")
+            image = extractImageFromJSON(jsonString)
+            if let img = image {
+                print("✅ Image extracted in sheet: \(img.size.width)x\(img.size.height)")
+            } else {
+                print("❌ Failed to extract image in sheet")
+            }
+        }
+    }
+
+    private func extractImageFromJSON(_ jsonString: String) -> NSImage? {
+        guard let jsonData = jsonString.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let dataUrl = json["imageDataUrl"] as? String,
+              let range = dataUrl.range(of: "base64,") else {
+            return nil
+        }
+
+        let base64String = String(dataUrl[range.upperBound...])
+
+        guard let imageData = Data(base64Encoded: base64String),
+              let image = NSImage(data: imageData) else {
+            return nil
+        }
+
+        return image
+    }
+}
+
+struct ScreenshotSheet: View {
+    let image: NSImage
+    @Environment(\.dismiss) private var dismiss
+    @State private var scale: CGFloat = 1.0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Screenshot")
+                    .font(.headline)
+
+                Text("(\(Int(image.size.width))×\(Int(image.size.height)))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                // Zoom controls
+                HStack(spacing: 8) {
+                    Button {
+                        scale = max(0.1, scale - 0.1)
+                    } label: {
+                        Image(systemName: "minus.magnifyingglass")
+                    }
+                    .help("Zoom out")
+
+                    Text("\(Int(scale * 100))%")
+                        .font(.caption)
+                        .frame(width: 50)
+
+                    Button {
+                        scale = min(3.0, scale + 0.1)
+                    } label: {
+                        Image(systemName: "plus.magnifyingglass")
+                    }
+                    .help("Zoom in")
+
+                    Button {
+                        scale = 1.0
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .help("Reset zoom")
+                }
+
+                Button("Done") {
+                    dismiss()
+                }
+            }
+            .padding()
+
+            Divider()
+
+            // Image
+            GeometryReader { geometry in
+                ScrollView([.horizontal, .vertical]) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(
+                            width: image.size.width * scale,
+                            height: image.size.height * scale
+                        )
+                        .frame(
+                            minWidth: geometry.size.width,
+                            minHeight: geometry.size.height,
+                            alignment: .center
+                        )
+                }
+            }
+        }
+        .frame(width: 900, height: 700)
     }
 }
 

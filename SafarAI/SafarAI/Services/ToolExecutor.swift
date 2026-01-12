@@ -45,6 +45,9 @@ class ToolExecutor {
         case "openInNewTab":
             result = await openInNewTab(arguments: toolCall.function.arguments)
 
+        case "getFullPageScreenshot":
+            result = await executeToolViaExtension(toolCall: toolCall)
+
         default:
             result = jsonError("Unknown tool: \(toolCall.function.name)")
         }

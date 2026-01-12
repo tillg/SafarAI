@@ -525,13 +525,25 @@ async function executeScreenshot(args) {
         throw new Error("No active tab found");
     }
 
-    // Safari's captureVisibleTab only captures viewport
-    // For full page, we need to scroll and stitch or use content script
-    const dataUrl = await browser.tabs.captureVisibleTab({ format: args.format || "png" });
+    // Capture visible viewport as PNG
+    const dataUrl = await browser.tabs.captureVisibleTab(null, { format: "png" });
+
+    // Get viewport dimensions from the tab
+    const viewport = await browser.tabs.sendMessage(tab.id, {
+        action: "getViewportDimensions"
+    }).catch(() => {
+        // If content script not available, return default dimensions
+        return { width: 1920, height: 1080 };
+    });
 
     return {
-        dataUrl: dataUrl,
-        note: "Viewport only - full page stitching not yet implemented"
+        imageDataUrl: dataUrl,
+        format: "png",
+        dimensions: {
+            width: viewport.width || 1920,
+            height: viewport.height || 1080
+        },
+        captureTime: new Date().toISOString()
     };
 }
 
