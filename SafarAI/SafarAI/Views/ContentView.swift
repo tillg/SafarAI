@@ -71,18 +71,9 @@ struct ContentView: View {
         }
         .onChange(of: extensionService.pageContent) { oldValue, newValue in
             // Extract favicon from page content
-            print("🔄 Page content changed")
-            if let content = newValue {
-                print("📄 New content: \(content.title)")
-                if let faviconDataUrl = content.faviconData, !faviconDataUrl.isEmpty {
-                    print("🖼️ Extracting favicon from base64 data...")
-                    extractFaviconImage(from: faviconDataUrl)
-                } else {
-                    print("⚠️ No favicon data in page content")
-                    faviconImage = nil
-                }
+            if let content = newValue, let faviconDataUrl = content.faviconData, !faviconDataUrl.isEmpty {
+                extractFaviconImage(from: faviconDataUrl)
             } else {
-                print("⚠️ Page content is nil, clearing favicon")
                 faviconImage = nil
             }
         }
@@ -342,9 +333,7 @@ struct ContentView: View {
     }
 
     private func extractFaviconImage(from dataUrl: String) {
-        // Extract base64 image data (same logic as screenshots)
         guard let range = dataUrl.range(of: "base64,") else {
-            print("❌ No base64 data in favicon")
             faviconImage = nil
             return
         }
@@ -352,12 +341,10 @@ struct ContentView: View {
         let base64String = String(dataUrl[range.upperBound...])
         guard let imageData = Data(base64Encoded: base64String),
               let image = NSImage(data: imageData) else {
-            print("❌ Failed to decode favicon base64 data")
             faviconImage = nil
             return
         }
 
-        print("✅ Created favicon NSImage: \(image.size.width)x\(image.size.height)")
         faviconImage = image
     }
 }

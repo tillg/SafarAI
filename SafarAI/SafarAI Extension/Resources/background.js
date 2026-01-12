@@ -144,14 +144,11 @@ const contentExtractedTabs = new Set();
 
 // Get page content from active or specific tab
 async function getPageContent(tabId = null, options = {}, skipIfAlreadyExtracted = false) {
-    console.log('🔍 getPageContent called with tabId:', tabId);
     try {
         let tab;
         if (tabId) {
-            console.log('📋 Getting tab by ID:', tabId);
             tab = await browser.tabs.get(tabId);
         } else {
-            console.log('📋 Querying active tab');
             const tabs = await browser.tabs.query({ active: true, currentWindow: true });
             tab = tabs[0];
         }
@@ -159,8 +156,6 @@ async function getPageContent(tabId = null, options = {}, skipIfAlreadyExtracted
         if (!tab) {
             throw new Error('No tab found');
         }
-
-        console.log('📋 Using tab:', tab.id, tab.url);
 
         // Skip if we already extracted content for this tab
         if (skipIfAlreadyExtracted && contentExtractedTabs.has(tab.id)) {
@@ -178,21 +173,17 @@ async function getPageContent(tabId = null, options = {}, skipIfAlreadyExtracted
             return;
         }
 
-        // Try to get content directly (skip ping check - Safari has messaging issues)
-        console.log('📨 Sending getPageContent to tab', tab.id);
+        // Get page content from content script
         const content = await browser.tabs.sendMessage(tab.id, {
             action: "getPageContent",
             options: options
         });
 
-        console.log('📬 Received response from tab', tab.id, ':', content ? 'success' : 'null');
-
         if (!content) {
             throw new Error('Content script not responding');
         }
 
-        console.log('📄 Content title:', content.title);
-        console.log('📄 Content keys:', Object.keys(content).join(', '));
+        console.log('📄', content.title);
 
         // Mark this tab as extracted
         contentExtractedTabs.add(tab.id);

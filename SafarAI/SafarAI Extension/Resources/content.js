@@ -12,16 +12,10 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.action === 'getPageContent') {
         // Async extraction with favicon
-        extractPageContentWithFavicon()
+        extractPageContent()
             .then(content => {
                 console.log('📄 Extracted:', content.title);
-                console.log('📄 Content keys:', Object.keys(content).join(', '));
-                console.log('📄 HTML length:', content.html?.length);
-                console.log('📄 Favicon URL:', content.faviconUrl);
-                console.log('📄 Has favicon data:', !!content.faviconData);
-                console.log('📄 Calling sendResponse...');
                 sendResponse(content);
-                console.log('✅ sendResponse called');
             })
             .catch(error => {
                 console.error('❌ Extract failed:', error.message, error.stack);
@@ -170,25 +164,8 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Log that content script loaded
 console.log('✅ SafarAI content script loaded');
 
-// Extract page content with favicon as base64
-async function extractPageContentWithFavicon() {
-    const content = extractPageContent();
-
-    // Try to get favicon as base64 data
-    try {
-        const faviconResult = await getFaviconAsBase64();
-        content.faviconData = faviconResult.imageDataUrl;
-        console.log('✅ Included favicon data in page content');
-    } catch (error) {
-        console.log('⚠️ Could not get favicon data:', error.message);
-        content.faviconData = null;
-    }
-
-    return content;
-}
-
-// Extract page content (synchronous)
-function extractPageContent() {
+// Extract page content (async, includes favicon)
+async function extractPageContent() {
     const content = {
         url: window.location.href,
         title: document.title,
@@ -250,6 +227,16 @@ function extractPageContent() {
         htmlLength: content.html.length,
         textLength: content.text.length
     });
+
+    // Try to get favicon as base64 data
+    try {
+        const faviconResult = await getFaviconAsBase64();
+        content.faviconData = faviconResult.imageDataUrl;
+        console.log('✅ Included favicon data in page content');
+    } catch (error) {
+        console.log('⚠️ Could not get favicon data:', error.message);
+        content.faviconData = null;
+    }
 
     return content;
 }
