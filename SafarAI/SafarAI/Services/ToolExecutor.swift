@@ -48,6 +48,9 @@ class ToolExecutor {
         case "getFullPageScreenshot":
             result = await executeToolViaExtension(toolCall: toolCall)
 
+        case "getFavicon":
+            result = await executeToolViaExtension(toolCall: toolCall)
+
         default:
             result = jsonError("Unknown tool: \(toolCall.function.name)")
         }

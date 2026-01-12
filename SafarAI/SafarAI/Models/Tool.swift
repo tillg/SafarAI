@@ -75,7 +75,8 @@ extension Tool {
         searchOnPage,
         getLinks,
         openInNewTab,
-        getFullPageScreenshot
+        getFullPageScreenshot,
+        getFavicon
     ]
 
     static let getPageText = Tool(function: FunctionDefinition(
@@ -165,6 +166,15 @@ extension Tool {
     static let getFullPageScreenshot = Tool(function: FunctionDefinition(
         name: "getFullPageScreenshot",
         description: "Captures a PNG screenshot of the currently visible viewport",
+        parameters: FunctionDefinition.Parameters(
+            properties: [:],
+            required: []
+        )
+    ))
+
+    static let getFavicon = Tool(function: FunctionDefinition(
+        name: "getFavicon",
+        description: "Get the favicon image of the current page as base64-encoded PNG data",
         parameters: FunctionDefinition.Parameters(
             properties: [:],
             required: []

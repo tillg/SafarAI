@@ -11,15 +11,23 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.action === 'getPageContent') {
-        try {
-            const content = extractPageContent();
-            console.log('📄', content.title);
-            sendResponse(content);
-        } catch (error) {
-            console.error('Extract failed:', error.message);
-            sendResponse(null);
-        }
-        return true;
+        // Async extraction with favicon
+        extractPageContentWithFavicon()
+            .then(content => {
+                console.log('📄 Extracted:', content.title);
+                console.log('📄 Content keys:', Object.keys(content).join(', '));
+                console.log('📄 HTML length:', content.html?.length);
+                console.log('📄 Favicon URL:', content.faviconUrl);
+                console.log('📄 Has favicon data:', !!content.faviconData);
+                console.log('📄 Calling sendResponse...');
+                sendResponse(content);
+                console.log('✅ sendResponse called');
+            })
+            .catch(error => {
+                console.error('❌ Extract failed:', error.message, error.stack);
+                sendResponse(null);
+            });
+        return true; // Keep channel open for async response
     }
 
     // Tool: getPageStructure
@@ -142,13 +150,44 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    // Tool: getFavicon
+    if (request.action === 'getFavicon') {
+        getFaviconAsBase64()
+            .then(result => {
+                console.log('✅ Favicon loaded:', result ? 'success' : 'failed');
+                sendResponse(JSON.stringify(result));
+            })
+            .catch(error => {
+                console.error('❌ getFavicon failed:', error.message);
+                sendResponse(JSON.stringify({ error: error.message }));
+            });
+        return true; // Async response
+    }
+
     return false;
 });
 
 // Log that content script loaded
 console.log('✅ SafarAI content script loaded');
 
-// Extract page content
+// Extract page content with favicon as base64
+async function extractPageContentWithFavicon() {
+    const content = extractPageContent();
+
+    // Try to get favicon as base64 data
+    try {
+        const faviconResult = await getFaviconAsBase64();
+        content.faviconData = faviconResult.imageDataUrl;
+        console.log('✅ Included favicon data in page content');
+    } catch (error) {
+        console.log('⚠️ Could not get favicon data:', error.message);
+        content.faviconData = null;
+    }
+
+    return content;
+}
+
+// Extract page content (synchronous)
 function extractPageContent() {
     const content = {
         url: window.location.href,
@@ -156,8 +195,31 @@ function extractPageContent() {
         html: '',
         text: '',
         description: '',
-        siteName: ''
+        siteName: '',
+        faviconUrl: '',
+        faviconData: null
     };
+
+    // Get favicon URL
+    try {
+        const faviconLink = document.querySelector('link[rel~="icon"]') ||
+                           document.querySelector('link[rel~="shortcut icon"]') ||
+                           document.querySelector('link[rel~="apple-touch-icon"]');
+        if (faviconLink) {
+            const href = faviconLink.getAttribute('href');
+            if (href) {
+                // Make absolute URL
+                content.faviconUrl = new URL(href, window.location.href).href;
+            }
+        }
+        if (!content.faviconUrl) {
+            // Fallback to standard /favicon.ico
+            content.faviconUrl = new URL('/favicon.ico', window.location.href).href;
+        }
+    } catch (error) {
+        console.log('⚠️ Failed to extract favicon URL:', error.message);
+        content.faviconUrl = '';
+    }
 
     // Get meta description
     const metaDescription = document.querySelector('meta[name="description"]');
@@ -422,4 +484,63 @@ function getLinks() {
         totalLinks: links.length,
         links: links
     };
+}
+
+async function getFaviconAsBase64() {
+    // Find favicon URL
+    const faviconLink = document.querySelector('link[rel~="icon"]') ||
+                       document.querySelector('link[rel~="shortcut icon"]') ||
+                       document.querySelector('link[rel~="apple-touch-icon"]');
+
+    let faviconUrl;
+    if (faviconLink) {
+        const href = faviconLink.getAttribute('href');
+        if (href) {
+            faviconUrl = new URL(href, window.location.href).href;
+        }
+    }
+
+    if (!faviconUrl) {
+        // Fallback to /favicon.ico
+        faviconUrl = new URL('/favicon.ico', window.location.href).href;
+    }
+
+    console.log('🔍 Fetching favicon from:', faviconUrl);
+
+    // Fetch the favicon (will include cookies/auth from this page's context)
+    const response = await fetch(faviconUrl);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch favicon: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+
+    // Convert to base64 using canvas for proper image format
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+
+            const dataUrl = canvas.toDataURL('image/png');
+
+            resolve({
+                imageDataUrl: dataUrl,
+                format: 'png',
+                dimensions: {
+                    width: img.width,
+                    height: img.height
+                },
+                sourceUrl: faviconUrl
+            });
+        };
+        img.onerror = () => {
+            reject(new Error('Failed to load favicon image'));
+        };
+        img.src = URL.createObjectURL(blob);
+    });
 }

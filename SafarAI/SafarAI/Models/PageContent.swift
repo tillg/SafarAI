@@ -1,6 +1,6 @@
 import Foundation
 
-struct PageContent: Codable {
+struct PageContent: Codable, Equatable {
     let url: String
     let title: String
     let html: String?
@@ -8,6 +8,8 @@ struct PageContent: Codable {
     let text: String
     let description: String?
     let siteName: String?
+    let faviconUrl: String?
+    let faviconData: String? // Base64-encoded favicon image
     let images: [PageImage]?
     let screenshot: String?
 
@@ -19,6 +21,8 @@ struct PageContent: Codable {
         text: String,
         description: String? = nil,
         siteName: String? = nil,
+        faviconUrl: String? = nil,
+        faviconData: String? = nil,
         images: [PageImage]? = nil,
         screenshot: String? = nil
     ) {
@@ -29,6 +33,8 @@ struct PageContent: Codable {
         self.text = text
         self.description = description
         self.siteName = siteName
+        self.faviconUrl = faviconUrl
+        self.faviconData = faviconData
         self.images = images
         self.screenshot = screenshot
     }
@@ -41,6 +47,8 @@ struct PageContent: Codable {
         self.text = dictionary["text"] as? String ?? ""
         self.description = dictionary["description"] as? String
         self.siteName = dictionary["siteName"] as? String
+        self.faviconUrl = dictionary["faviconUrl"] as? String
+        self.faviconData = dictionary["faviconData"] as? String
 
         if let imagesData = dictionary["images"] as? [[String: Any]] {
             self.images = imagesData.compactMap { PageImage(from: $0) }
@@ -57,7 +65,7 @@ struct PageContent: Codable {
     }
 }
 
-struct PageImage: Codable {
+struct PageImage: Codable, Equatable {
     let url: String
     let alt: String?
     let width: Int
@@ -72,5 +80,14 @@ struct PageImage: Codable {
         self.height = dictionary["height"] as? Int ?? 0
         self.position = dictionary["position"] as? String ?? "inline"
         self.data = dictionary["data"] as? String
+    }
+
+    static func == (lhs: PageImage, rhs: PageImage) -> Bool {
+        lhs.url == rhs.url &&
+        lhs.alt == rhs.alt &&
+        lhs.width == rhs.width &&
+        lhs.height == rhs.height &&
+        lhs.position == rhs.position &&
+        lhs.data == rhs.data
     }
 }

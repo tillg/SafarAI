@@ -4,7 +4,7 @@ struct ContentView: View {
     @State private var messages: [Message] = []
     @State private var input = ""
     @State private var isLoading = false
-    @State private var includePageContext = true
+    @State private var faviconImage: NSImage?
 
     @Environment(ExtensionService.self) private var extensionService
     @Environment(AIService.self) private var aiService
@@ -15,11 +15,6 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 // Header
                 headerView
-
-                // Page context banner
-                if let page = extensionService.pageContent {
-                    pageContextBanner(page)
-                }
 
                 Divider()
 
@@ -71,8 +66,25 @@ struct ContentView: View {
             let executor = ToolExecutor(extensionService: extensionService)
             aiService.setToolExecutor(executor)
 
-            // Request page content
-            extensionService.requestPageContent()
+            // Ping extension to initiate connection
+            extensionService.ping()
+        }
+        .onChange(of: extensionService.pageContent) { oldValue, newValue in
+            // Extract favicon from page content
+            print("🔄 Page content changed")
+            if let content = newValue {
+                print("📄 New content: \(content.title)")
+                if let faviconDataUrl = content.faviconData, !faviconDataUrl.isEmpty {
+                    print("🖼️ Extracting favicon from base64 data...")
+                    extractFaviconImage(from: faviconDataUrl)
+                } else {
+                    print("⚠️ No favicon data in page content")
+                    faviconImage = nil
+                }
+            } else {
+                print("⚠️ Page content is nil, clearing favicon")
+                faviconImage = nil
+            }
         }
     }
 
@@ -88,46 +100,9 @@ struct ContentView: View {
             }
 
             Spacer()
-
-            Button("Refresh", systemImage: "arrow.clockwise") {
-                extensionService.requestPageContent()
-            }
-            .buttonStyle(.plain)
-            .help("Refresh page content")
         }
         .padding()
         .background(Color(nsColor: .windowBackgroundColor))
-    }
-
-    private func pageContextBanner(_ page: PageContent) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "doc.fill")
-                .foregroundStyle(Color.blue)
-                .font(.caption)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(page.title)
-                    .font(.caption)
-                    .lineLimit(1)
-                Text(page.url)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            Button("Remove", systemImage: "xmark.circle.fill") {
-                extensionService.pageContent = nil
-            }
-            .buttonStyle(.plain)
-            .font(.caption)
-            .labelStyle(.iconOnly)
-            .help("Remove page context")
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.blue.opacity(0.1))
     }
 
     private var emptyStateView: some View {
@@ -186,73 +161,101 @@ struct ContentView: View {
 
     private var pageContextIndicator: some View {
         Group {
-            if let content = extensionService.pageContent {
-                // Page context available
+            if !extensionService.isConnected {
+                // Extension not connected
                 HStack(spacing: 6) {
-                    Toggle(isOn: $includePageContext) {
-                        HStack(spacing: 6) {
-                            Image(systemName: includePageContext ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(includePageContext ? .green : .secondary)
-                                .font(.caption)
+                    ProgressView()
+                        .scaleEffect(0.6)
+                        .controlSize(.small)
 
-                            Text(includePageContext ? "Including page context" : "Page context disabled")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Safari Extension Not Connected")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                        Text("Make sure the SafarAI extension is enabled in Safari")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
-                    .toggleStyle(.button)
-                    .buttonStyle(.plain)
-
-                    Spacer()
-
-                    Text("\(content.text.count) chars")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background((includePageContext ? Color.green : Color.gray).opacity(0.1))
-                .clipShape(.rect(cornerRadius: 6))
-            } else if extensionService.currentTabUrl != nil {
-                // Tab is open but content extraction failed
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                        .font(.caption)
-
-                    Text("Page context unavailable (content script failed)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
 
                     Spacer()
 
                     Button {
-                        extensionService.requestPageContent()
+                        extensionService.ping()
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.caption)
                     }
                     .buttonStyle(.plain)
-                    .help("Retry content extraction")
+                    .help("Retry connection")
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.orange.opacity(0.1))
+                .padding(.vertical, 6)
+                .background(Color.orange.opacity(0.15))
+                .clipShape(.rect(cornerRadius: 6))
+            } else if let content = extensionService.pageContent {
+                // Page content loaded - show page title
+                HStack(spacing: 6) {
+                    // Favicon or fallback icon
+                    if let favicon = faviconImage {
+                        Image(nsImage: favicon)
+                            .resizable()
+                            .frame(width: 16, height: 16)
+                            .clipShape(RoundedRectangle(cornerRadius: 2))
+                    } else {
+                        Image(systemName: "doc.text.fill")
+                            .foregroundStyle(.green)
+                            .font(.caption)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(content.title.isEmpty ? "Page content available" : content.title)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .lineLimit(1)
+                        if let url = URL(string: content.url), let host = url.host {
+                            Text(host)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+
+                    Spacer()
+
+                    Text("\(content.text.count) chars")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Color.green.opacity(0.15))
                 .clipShape(.rect(cornerRadius: 6))
             } else {
-                // No tab
+                // Connected but no content - could be loading or no tab open
                 HStack(spacing: 6) {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.secondary)
-                        .font(.caption)
+                    if extensionService.currentTabUrl != nil {
+                        // Tab is open, content might be loading
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .controlSize(.small)
 
-                    Text("No page loaded")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        Text("Loading page content...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        // No tab open
+                        Image(systemName: "safari")
+                            .foregroundStyle(.blue)
+                            .font(.caption)
+
+                        Text("Open a webpage in Safari")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(nsColor: .controlBackgroundColor))
+                .padding(.vertical, 6)
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
                 .clipShape(.rect(cornerRadius: 6))
             }
         }
@@ -280,7 +283,7 @@ struct ContentView: View {
         let pageContextSnapshot: String?
         let pageContentToSend: PageContent?
 
-        if includePageContext, let content = extensionService.pageContent {
+        if let content = extensionService.pageContent {
             pageContextSnapshot = """
             [Page Context]
             Title: \(content.title)
@@ -289,9 +292,6 @@ struct ContentView: View {
             \(content.contentForLLM)
             """
             pageContentToSend = content
-        } else if !includePageContext {
-            pageContextSnapshot = nil
-            pageContentToSend = nil
         } else {
             pageContextSnapshot = nil
             pageContentToSend = nil
@@ -339,6 +339,26 @@ struct ContentView: View {
                 )
             }
         }
+    }
+
+    private func extractFaviconImage(from dataUrl: String) {
+        // Extract base64 image data (same logic as screenshots)
+        guard let range = dataUrl.range(of: "base64,") else {
+            print("❌ No base64 data in favicon")
+            faviconImage = nil
+            return
+        }
+
+        let base64String = String(dataUrl[range.upperBound...])
+        guard let imageData = Data(base64Encoded: base64String),
+              let image = NSImage(data: imageData) else {
+            print("❌ Failed to decode favicon base64 data")
+            faviconImage = nil
+            return
+        }
+
+        print("✅ Created favicon NSImage: \(image.size.width)x\(image.size.height)")
+        faviconImage = image
     }
 }
 

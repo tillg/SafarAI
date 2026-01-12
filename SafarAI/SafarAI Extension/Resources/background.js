@@ -91,6 +91,9 @@ async function handleToolCall(data) {
             case "getFullPageScreenshot":
                 result = await executeScreenshot(args);
                 break;
+            case "getFavicon":
+                result = await executeFavicon(args);
+                break;
             default:
                 throw new Error(`Unknown tool: ${toolName}`);
         }
@@ -141,11 +144,14 @@ const contentExtractedTabs = new Set();
 
 // Get page content from active or specific tab
 async function getPageContent(tabId = null, options = {}, skipIfAlreadyExtracted = false) {
+    console.log('🔍 getPageContent called with tabId:', tabId);
     try {
         let tab;
         if (tabId) {
+            console.log('📋 Getting tab by ID:', tabId);
             tab = await browser.tabs.get(tabId);
         } else {
+            console.log('📋 Querying active tab');
             const tabs = await browser.tabs.query({ active: true, currentWindow: true });
             tab = tabs[0];
         }
@@ -153,6 +159,8 @@ async function getPageContent(tabId = null, options = {}, skipIfAlreadyExtracted
         if (!tab) {
             throw new Error('No tab found');
         }
+
+        console.log('📋 Using tab:', tab.id, tab.url);
 
         // Skip if we already extracted content for this tab
         if (skipIfAlreadyExtracted && contentExtractedTabs.has(tab.id)) {
@@ -171,16 +179,20 @@ async function getPageContent(tabId = null, options = {}, skipIfAlreadyExtracted
         }
 
         // Try to get content directly (skip ping check - Safari has messaging issues)
+        console.log('📨 Sending getPageContent to tab', tab.id);
         const content = await browser.tabs.sendMessage(tab.id, {
             action: "getPageContent",
             options: options
         });
 
+        console.log('📬 Received response from tab', tab.id, ':', content ? 'success' : 'null');
+
         if (!content) {
             throw new Error('Content script not responding');
         }
 
-        console.log('📄', content.title);
+        console.log('📄 Content title:', content.title);
+        console.log('📄 Content keys:', Object.keys(content).join(', '));
 
         // Mark this tab as extracted
         contentExtractedTabs.add(tab.id);
@@ -255,6 +267,9 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete') {
         console.log('🔗 Page load event:', { tabId, url: tab.url, title: tab.title });
 
+        // Clear extraction tracking for this tab (page was reloaded)
+        contentExtractedTabs.delete(tabId);
+
         sendToNative({
             action: "browserEvent",
             event: {
@@ -277,7 +292,11 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                 title: tab.title
             });
 
+            // Try to get page content with progressive delays (content script needs time to load)
             getPageContent(tabId);
+            setTimeout(() => getPageContent(tabId), 500);
+            setTimeout(() => getPageContent(tabId), 1000);
+            setTimeout(() => getPageContent(tabId), 2000);
         }, 200);
     }
 });
@@ -545,6 +564,23 @@ async function executeScreenshot(args) {
         },
         captureTime: new Date().toISOString()
     };
+}
+
+// Get favicon of current page
+async function executeFavicon(args) {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+
+    if (!tab) {
+        throw new Error("No active tab found");
+    }
+
+    // Get favicon from content script (has access to cookies/auth)
+    const result = await browser.tabs.sendMessage(tab.id, {
+        action: "getFavicon"
+    });
+
+    return result;
 }
 
 // Connect to native app on startup

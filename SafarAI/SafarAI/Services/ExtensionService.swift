@@ -107,6 +107,8 @@ final class ExtensionService {
                         text: content.text,
                         description: content.description,
                         siteName: content.siteName,
+                        faviconUrl: content.faviconUrl,
+                        faviconData: content.faviconData,
                         images: content.images,
                         screenshot: content.screenshot
                     )
@@ -140,6 +142,11 @@ final class ExtensionService {
                         }
                         currentTabUrl = event.url
                         currentTabTitle = event.title
+
+                        // Clear old page content on page load/reload
+                        // It will be refreshed when content script responds
+                        pageContent = nil
+                        log("⚠️ Page loaded - page content cleared, waiting for refresh")
                     }
                 } else {
                     logError("Failed to parse browser event: \(eventData)")
