@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		F91258F02F0ACB4C005EAFC2 /* SafarAI Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F91258EF2F0ACB4C005EAFC2 /* SafarAI Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F92B06732F14CEEE00CB460F /* SwiftHTMLtoMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = F92B06722F14CEEE00CB460F /* SwiftHTMLtoMarkdown */; };
+		F92B06782F14D54500CB460F /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = F92B06772F14D54500CB460F /* MarkdownUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -76,6 +77,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F92B06732F14CEEE00CB460F /* SwiftHTMLtoMarkdown in Frameworks */,
+				F92B06782F14D54500CB460F /* MarkdownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -130,6 +132,7 @@
 			name = SafarAI;
 			packageProductDependencies = (
 				F92B06722F14CEEE00CB460F /* SwiftHTMLtoMarkdown */,
+				F92B06772F14D54500CB460F /* MarkdownUI */,
 			);
 			productName = SafarAI;
 			productReference = F91258D52F0ACB4B005EAFC2 /* SafarAI.app */;
@@ -186,6 +189,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				F92B06712F14CEEE00CB460F /* XCRemoteSwiftPackageReference "SwiftHTMLtoMarkdown" */,
+				F92B06762F14D54500CB460F /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F91258D62F0ACB4B005EAFC2 /* Products */;
@@ -566,6 +570,14 @@
 				minimumVersion = 1.1.1;
 			};
 		};
+		F92B06762F14D54500CB460F /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -573,6 +585,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F92B06712F14CEEE00CB460F /* XCRemoteSwiftPackageReference "SwiftHTMLtoMarkdown" */;
 			productName = SwiftHTMLtoMarkdown;
+		};
+		F92B06772F14D54500CB460F /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F92B06762F14D54500CB460F /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

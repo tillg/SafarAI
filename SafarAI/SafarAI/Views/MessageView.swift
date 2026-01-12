@@ -14,10 +14,10 @@ struct MessageView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Text(message.content)
+                // Both user and AI messages render as Markdown
+                MarkdownView(markdown: message.content, textColor: textColor)
                     .padding(10)
                     .background(backgroundColor)
-                    .foregroundStyle(textColor)
                     .clipShape(.rect(cornerRadius: 12))
             }
             .frame(maxWidth: 300, alignment: message.role == .user ? .trailing : .leading)
@@ -38,9 +38,28 @@ struct MessageView: View {
 }
 
 #Preview {
-    VStack {
-        MessageView(message: Message(role: .user, content: "Hello, how are you?"))
-        MessageView(message: Message(role: .assistant, content: "I'm doing well, thanks for asking!"))
+    VStack(spacing: 12) {
+        MessageView(message: Message(role: .user, content: "How do I use **bold** and `code` in Markdown?"))
+
+        MessageView(message: Message(role: .assistant, content: """
+        Here's how to use Markdown formatting:
+
+        ## Text Formatting
+        - **Bold**: Use `**text**`
+        - *Italic*: Use `*text*`
+        - `Code`: Use backticks
+
+        ## Code Blocks
+        ```swift
+        let greeting = "Hello!"
+        print(greeting)
+        ```
+
+        [Learn more](https://www.markdownguide.org)
+        """))
+
+        MessageView(message: Message(role: .user, content: "Thanks!"))
     }
     .padding()
+    .frame(width: 400)
 }
