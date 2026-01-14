@@ -25,6 +25,9 @@ final class ExtensionService {
     var events: [BrowserEvent] = []
     let eventsLogURL: URL
 
+    /// Event IDs that should be initially expanded (from manual tool execution)
+    var expandedEventIDs: Set<UUID> = []
+
     private let extensionBundleIdentifier = "com.grtnr.SafarAI.Extension"
     private let appGroupIdentifier = "group.com.grtnr.SafarAI"
     private var observer: NSObjectProtocol?
@@ -364,6 +367,16 @@ final class ExtensionService {
             ]
         )
         addEvent(event)
+    }
+
+    /// Mark an event to be initially expanded in the timeline
+    func markEventForExpansion(_ eventId: UUID) {
+        expandedEventIDs.insert(eventId)
+    }
+
+    /// Check if an event should be initially expanded and remove from set
+    func shouldExpandEvent(_ eventId: UUID) -> Bool {
+        expandedEventIDs.remove(eventId) != nil
     }
 
     func requestOpenTab(url: String) {

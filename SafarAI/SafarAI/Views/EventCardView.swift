@@ -2,9 +2,17 @@ import SwiftUI
 
 struct EventCardView: View {
     let event: BrowserEvent
+    var initiallyExpanded: Bool = false
+
     @State private var isExpanded = false
     @State private var showingPageContext = false
     @State private var showingFullPrompt = false
+
+    init(event: BrowserEvent, initiallyExpanded: Bool = false) {
+        self.event = event
+        self.initiallyExpanded = initiallyExpanded
+        self._isExpanded = State(initialValue: initiallyExpanded)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

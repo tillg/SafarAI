@@ -3,6 +3,7 @@ import SwiftUI
 struct EventTimelineView: View {
     let events: [BrowserEvent]
     let eventsLogURL: URL
+    var expandedEventIDs: Set<UUID> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -52,8 +53,11 @@ struct EventTimelineView: View {
                     ScrollView {
                         LazyVStack(spacing: 6) {
                             ForEach(events) { event in
-                                EventCardView(event: event)
-                                    .id(event.id)
+                                EventCardView(
+                                    event: event,
+                                    initiallyExpanded: expandedEventIDs.contains(event.id)
+                                )
+                                .id(event.id)
                             }
                         }
                         .padding(8)

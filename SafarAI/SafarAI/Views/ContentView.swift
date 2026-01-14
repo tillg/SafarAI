@@ -5,6 +5,7 @@ struct ContentView: View {
     @State private var input = ""
     @State private var isLoading = false
     @State private var faviconImage: NSImage?
+    @State private var showingToolsPopover = false
 
     @Environment(ExtensionService.self) private var extensionService
     @Environment(AIService.self) private var aiService
@@ -57,7 +58,8 @@ struct ContentView: View {
             // Event timeline on the right
             EventTimelineView(
                 events: extensionService.events,
-                eventsLogURL: extensionService.eventsLogURL
+                eventsLogURL: extensionService.eventsLogURL,
+                expandedEventIDs: extensionService.expandedEventIDs
             )
             .frame(width: 250)
         }
@@ -91,6 +93,20 @@ struct ContentView: View {
             }
 
             Spacer()
+
+            // Tools button
+            Button {
+                showingToolsPopover.toggle()
+            } label: {
+                Image(systemName: "wrench.and.screwdriver")
+                    .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Browse and run tools")
+            .popover(isPresented: $showingToolsPopover, arrowEdge: .bottom) {
+                ToolsPopoverView(isPresented: $showingToolsPopover)
+            }
 
             // Profile selector
             if let activeProfile = aiService.activeProfile {
