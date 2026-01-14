@@ -9,6 +9,7 @@ struct ProfileFormView: View {
     @State private var apiKey: String
     @State private var selectedModel: String
     @State private var maxTokens: Int
+    @State private var contextLimit: Int
     @State private var selectedColor: String
     @State private var selectedPreset: LLMProfile.Preset?
 
@@ -60,6 +61,7 @@ struct ProfileFormView: View {
         _apiKey = State(initialValue: "")
         _selectedModel = State(initialValue: profile?.model ?? "")
         _maxTokens = State(initialValue: profile?.maxTokens ?? 4096)
+        _contextLimit = State(initialValue: profile?.contextLimit ?? 16384)
         _selectedColor = State(initialValue: profile?.color ?? "red")
     }
 
@@ -217,6 +219,49 @@ struct ProfileFormView: View {
                             }
                         }
                     }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Context Limit:")
+                            Spacer()
+                            Text("\(contextLimit)")
+                                .foregroundStyle(.secondary)
+
+                            if let limit = getModelContextLimit(selectedModel) {
+                                Button("Set to model default") {
+                                    contextLimit = limit
+                                }
+                                .buttonStyle(.borderless)
+                                .controlSize(.small)
+                            }
+                        }
+
+                        Slider(value: Binding(
+                            get: { Double(contextLimit) },
+                            set: { contextLimit = Int($0) }
+                        ), in: 1024...131072, step: 1024)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Total context window size (input + output tokens)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            if !selectedModel.isEmpty {
+                                if let limit = getModelContextLimit(selectedModel) {
+                                    Text("Note: \(selectedModel) has \(limit) token context window")
+                                        .font(.caption)
+                                        .foregroundStyle(contextLimit == limit ? .green : .orange)
+                                        .fontWeight(.medium)
+                                } else {
+                                    Text("Check your provider's docs for \(selectedModel)'s context limit")
+                                        .font(.caption)
+                                        .foregroundStyle(.orange)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Section("Visual") {
@@ -257,6 +302,7 @@ struct ProfileFormView: View {
                 baseURL = profile.baseURL
                 selectedModel = profile.model
                 maxTokens = profile.maxTokens
+                contextLimit = profile.contextLimit
                 selectedColor = profile.color
                 apiKey = aiService.loadAPIKey(for: profile)
             }
@@ -282,6 +328,7 @@ struct ProfileFormView: View {
                     hasAPIKey: !apiKey.isEmpty,
                     model: "test",
                     maxTokens: maxTokens,
+                    contextLimit: contextLimit,
                     color: selectedColor
                 )
 
@@ -320,6 +367,7 @@ struct ProfileFormView: View {
                 hasAPIKey: !apiKey.isEmpty,
                 model: selectedModel,
                 maxTokens: maxTokens,
+                contextLimit: contextLimit,
                 color: selectedColor
             )
         } else {
@@ -329,6 +377,7 @@ struct ProfileFormView: View {
                 hasAPIKey: !apiKey.isEmpty,
                 model: selectedModel,
                 maxTokens: maxTokens,
+                contextLimit: contextLimit,
                 color: selectedColor
             )
         }
@@ -384,6 +433,51 @@ struct ProfileFormView: View {
         // Gemini models
         else if modelLower.contains("gemini-pro") {
             return 8192
+        }
+
+        return nil
+    }
+
+    /// Get known context window limits for common models
+    private func getModelContextLimit(_ model: String) -> Int? {
+        let modelLower = model.lowercased()
+
+        // OpenAI models
+        if modelLower.contains("gpt-4o") {
+            return 128000
+        } else if modelLower.contains("gpt-4-turbo") || modelLower.contains("gpt-4-1106") || modelLower.contains("gpt-4-0125") {
+            return 128000
+        } else if modelLower.contains("gpt-4-32k") {
+            return 32768
+        } else if modelLower.contains("gpt-4") {
+            return 8192
+        } else if modelLower.contains("gpt-3.5-turbo-16k") {
+            return 16384
+        } else if modelLower.contains("gpt-3.5-turbo") {
+            return 16385
+        }
+
+        // Anthropic models (via OpenRouter/Together)
+        else if modelLower.contains("claude-3") {
+            return 200000
+        } else if modelLower.contains("claude-2") {
+            return 100000
+        }
+
+        // Groq models
+        else if modelLower.contains("mixtral") {
+            return 32768
+        } else if modelLower.contains("llama-3") {
+            return 8192
+        } else if modelLower.contains("llama-2") {
+            return 4096
+        }
+
+        // Gemini models
+        else if modelLower.contains("gemini-1.5") {
+            return 1000000
+        } else if modelLower.contains("gemini-pro") {
+            return 32768
         }
 
         return nil

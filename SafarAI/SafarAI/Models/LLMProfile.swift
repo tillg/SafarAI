@@ -8,6 +8,7 @@ struct LLMProfile: Identifiable, Codable, Equatable {
     var hasAPIKey: Bool
     var model: String
     var maxTokens: Int
+    var contextLimit: Int // Total context window size for the model
     var color: String // Stored as string, converted to Color
 
     init(
@@ -17,6 +18,7 @@ struct LLMProfile: Identifiable, Codable, Equatable {
         hasAPIKey: Bool = true,
         model: String,
         maxTokens: Int = 4096,
+        contextLimit: Int = 16384,
         color: String = "red"
     ) {
         self.id = id
@@ -25,7 +27,15 @@ struct LLMProfile: Identifiable, Codable, Equatable {
         self.hasAPIKey = hasAPIKey
         self.model = model
         self.maxTokens = maxTokens
+        self.contextLimit = contextLimit
         self.color = color
+    }
+
+    /// Compute available tokens for input (context minus completion tokens and overhead)
+    var availableInputTokens: Int {
+        // Reserve: maxTokens for completion + ~500 for tools/overhead
+        let reserved = maxTokens + 500
+        return max(1000, contextLimit - reserved)
     }
 
     /// Get the display color for this profile

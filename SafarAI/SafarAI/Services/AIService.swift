@@ -82,6 +82,7 @@ final class AIService {
             hasAPIKey: !legacyKey.isEmpty,
             model: legacyModel,
             maxTokens: 4096,
+            contextLimit: 16384,
             color: "red"
         )
 
@@ -141,13 +142,32 @@ final class AIService {
         if let content = pageContent,
            let lastIndex = apiMessages.lastIndex(where: { ($0["role"] as? String) == "user" }),
            let userContent = apiMessages[lastIndex]["content"] as? String {
+
+            // Calculate available space for page content
+            // Rough estimate: ~4 characters per token
+            let charsPerToken = 4
+            let availableTokens = profile.availableInputTokens
+            let overheadChars = 200 // For headers like "[Page Context]", etc.
+            let userMessageChars = userContent.count
+            let maxContentChars = (availableTokens * charsPerToken) - overheadChars - userMessageChars
+
+            // Truncate page content if needed
+            let pageText = content.contentForLLM
+            let truncatedContent: String
+            if pageText.count > maxContentChars && maxContentChars > 0 {
+                truncatedContent = String(pageText.prefix(maxContentChars)) + "\n\n[Content truncated to fit context window]"
+                print("⚠️ Truncated page content from \(pageText.count) to \(maxContentChars) chars")
+            } else {
+                truncatedContent = pageText
+            }
+
             let contextText = """
             [Page Context]
             Title: \(content.title)
             URL: \(content.url)
             \(content.description.map { "Description: \($0)\n" } ?? "")
             Content:
-            \(content.contentForLLM)
+            \(truncatedContent)
 
             [User Question]
             \(userContent)

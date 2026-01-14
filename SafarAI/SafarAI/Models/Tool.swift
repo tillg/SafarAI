@@ -124,7 +124,7 @@ extension Tool {
 
     static let searchOnPage = Tool(function: FunctionDefinition(
         name: "searchOnPage",
-        description: "Search for text on the current page and return matching contexts",
+        description: "Search for exact text matches on the page. Returns match count only. For content analysis or extraction, prefer getPageText and analyze the full text instead.",
         parameters: FunctionDefinition.Parameters(
             properties: [
                 "query": FunctionDefinition.Parameters.Property(
