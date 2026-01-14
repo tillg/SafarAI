@@ -29,11 +29,12 @@ struct SafarAIApp: App {
                     // Will be handled by ContentView in future
                 }
                 .keyboardShortcut("k", modifiers: .command)
+            }
 
-                Divider()
-
-                Button("Settings...") {
-                    // Will open settings window in future
+            // Use the standard CommandGroup for Settings which properly opens the Settings scene
+            CommandGroup(replacing: .appSettings) {
+                SettingsLink {
+                    Text("Settings...")
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
@@ -43,6 +44,8 @@ struct SafarAIApp: App {
             SettingsView()
                 .environment(aiService)
                 .environment(extensionService)
+                .frame(minWidth: 600, minHeight: 500)
         }
+        .windowResizability(.contentSize)
     }
 }

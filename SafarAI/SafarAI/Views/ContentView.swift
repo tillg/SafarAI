@@ -91,6 +91,65 @@ struct ContentView: View {
             }
 
             Spacer()
+
+            // Profile selector
+            if let activeProfile = aiService.activeProfile {
+                Menu {
+                    ForEach(aiService.profiles) { profile in
+                        Button {
+                            aiService.switchProfile(to: profile)
+
+                            // Add system message to chat
+                            let systemMsg = Message(
+                                role: .system,
+                                content: "Switched to \(profile.name)"
+                            )
+                            messages.append(systemMsg)
+                        } label: {
+                            HStack {
+                                Circle()
+                                    .fill(profile.displayColor)
+                                    .frame(width: 8, height: 8)
+
+                                Text(profile.name)
+
+                                if profile.id == activeProfile.id {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(activeProfile.displayColor)
+                            .frame(width: 8, height: 8)
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(activeProfile.name)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                            Text(activeProfile.model)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Image(systemName: "chevron.down")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .clipShape(.rect(cornerRadius: 6))
+                }
+                .menuStyle(.borderlessButton)
+                .help("Switch LLM profile")
+            } else {
+                Text("No profile")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding()
         .background(Color(nsColor: .windowBackgroundColor))
@@ -128,9 +187,6 @@ struct ContentView: View {
             HStack(spacing: 8) {
                 TextField("Ask me anything...", text: $input, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .padding(8)
-                    .background(Color(nsColor: .controlBackgroundColor))
-                    .clipShape(.rect(cornerRadius: 8))
                     .lineLimit(1...5)
                     .onSubmit {
                         sendMessage()
@@ -144,6 +200,18 @@ struct ContentView: View {
                 .foregroundStyle(input.isEmpty ? .secondary : Color.blue)
                 .disabled(input.isEmpty || isLoading)
                 .help("Send message")
+            }
+            .padding(8)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(.rect(cornerRadius: 8))
+            .overlay(alignment: .leading) {
+                // Colored accent bar as overlay
+                if let activeProfile = aiService.activeProfile {
+                    Rectangle()
+                        .fill(activeProfile.displayColor)
+                        .frame(width: 3)
+                        .clipShape(.rect(cornerRadius: 1.5))
+                }
             }
         }
         .padding()
@@ -324,9 +392,10 @@ struct ContentView: View {
                 messages.append(aiMessage)
 
                 // Log AI response event
+                let modelString = aiService.activeProfile.map { "\($0.name)/\($0.model)" } ?? "unknown"
                 extensionService.logAIResponse(
                     responseLength: response.count,
-                    model: "\(aiService.provider.rawValue)/\(aiService.model)"
+                    model: modelString
                 )
             }
         }

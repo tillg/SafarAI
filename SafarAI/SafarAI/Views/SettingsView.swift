@@ -4,28 +4,41 @@ struct SettingsView: View {
     @Environment(AIService.self) private var aiService
     @Environment(ExtensionService.self) private var extensionService
 
-    @State private var apiKey: String = ""
     @State private var contentExtractionDelay: Double = 1000
     @State private var toolTimeout: Double = 10.0
+    @State private var profileFormState: ProfileFormState?
+
+    struct ProfileFormState: Identifiable {
+        let id = UUID()
+        let profile: LLMProfile?
+
+        static func add() -> ProfileFormState {
+            ProfileFormState(profile: nil)
+        }
+
+        static func edit(_ profile: LLMProfile) -> ProfileFormState {
+            ProfileFormState(profile: profile)
+        }
+    }
 
     var body: some View {
         Form {
-            Section("AI Provider") {
-                Picker("Provider", selection: Binding(
-                    get: { aiService.provider },
-                    set: { aiService.provider = $0 }
-                )) {
-                    ForEach(AIProvider.allCases, id: \.self) { provider in
-                        Text(provider.displayName).tag(provider)
+            Section("LLM Profiles") {
+                if aiService.profiles.isEmpty {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text("No profiles configured")
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    ForEach(aiService.profiles) { profile in
+                        profileRow(profile)
                     }
                 }
 
-                TextField("API Key", text: $apiKey)
-                    .textFieldStyle(.roundedBorder)
-
-                Button("Save") {
-                    aiService.apiKey = apiKey
-                    aiService.saveSettings()
+                Button("Add Profile") {
+                    profileFormState = .add()
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -118,9 +131,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 500)
         .onAppear {
-            apiKey = aiService.apiKey
             contentExtractionDelay = UserDefaults.standard.double(forKey: "content_extraction_delay")
             if contentExtractionDelay == 0 {
                 contentExtractionDelay = 1000 // Default
@@ -130,6 +141,96 @@ struct SettingsView: View {
                 toolTimeout = 10.0 // Default
             }
         }
+        .sheet(item: $profileFormState) { formState in
+            ProfileFormView(profile: formState.profile) { savedProfile, apiKey in
+                if formState.profile != nil {
+                    // Editing existing profile
+                    aiService.updateProfile(savedProfile)
+                } else {
+                    // Adding new profile
+                    aiService.addProfile(savedProfile)
+                }
+
+                if !apiKey.isEmpty {
+                    aiService.saveAPIKey(apiKey, for: savedProfile)
+                }
+            }
+            .environment(aiService)
+        }
+    }
+
+    @ViewBuilder
+    private func profileRow(_ profile: LLMProfile) -> some View {
+        HStack(spacing: 12) {
+            // Color indicator
+            Circle()
+                .fill(profile.displayColor)
+                .frame(width: 12, height: 12)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(profile.name)
+                        .font(.headline)
+
+                    if aiService.activeProfile?.id == profile.id {
+                        Text("Active")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.2))
+                            .clipShape(.rect(cornerRadius: 4))
+                            .foregroundStyle(.blue)
+                    }
+                }
+
+                Text(profile.model)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    Label(profile.baseURL, systemImage: "link")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                    if profile.hasAPIKey {
+                        Image(systemName: "key.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.green)
+                    }
+                }
+            }
+
+            Spacer()
+
+            // Actions
+            HStack(spacing: 8) {
+                if aiService.activeProfile?.id != profile.id {
+                    Button("Use") {
+                        aiService.switchProfile(to: profile)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
+                Button("Edit") {
+                    profileFormState = ProfileFormState.edit(profile)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button(role: .destructive) {
+                    aiService.deleteProfile(profile)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.red)
+                .help("Delete profile")
+                .disabled(aiService.profiles.count == 1)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

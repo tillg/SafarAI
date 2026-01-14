@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MessageView: View {
     let message: Message
+    @Environment(AIService.self) private var aiService
 
     var body: some View {
         HStack {
@@ -10,7 +11,7 @@ struct MessageView: View {
             }
 
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
-                Text(message.role == .user ? "You" : "AI")
+                Text(roleLabel)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -34,6 +35,20 @@ struct MessageView: View {
 
     private var textColor: Color {
         message.role == .user ? .white : Color(nsColor: .labelColor)
+    }
+
+    private var roleLabel: String {
+        if message.role == .user {
+            return "You"
+        } else if message.role == .system {
+            return "System"
+        } else {
+            // AI message - show profile name if available
+            if let profile = aiService.activeProfile {
+                return "AI [\(profile.name) - \(profile.model)]"
+            }
+            return "AI"
+        }
     }
 }
 
