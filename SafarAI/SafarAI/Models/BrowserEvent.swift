@@ -20,17 +20,18 @@ struct BrowserEvent: Identifiable, Codable {
         case toolCall = "tool_call"
         case toolResult = "tool_result"
 
-        func icon(isError: Bool = false) -> String {
+        /// Returns a tuple of SF Symbol names: (base symbol, direction indicator)
+        func icon(isError: Bool = false) -> (base: String, direction: String?) {
             switch self {
-            case .tabSwitch: return "🔄"
-            case .tabOpen: return "➕"
-            case .tabClose: return "➖"
-            case .pageLoad: return "🔗"
-            case .linkClick: return "🔗"
-            case .aiQuery: return "💬"
-            case .aiResponse: return "🤖"
-            case .toolCall: return "🔧"
-            case .toolResult: return isError ? "❌" : "✅"
+            case .aiQuery: return ("brain", "arrow.right")
+            case .aiResponse: return ("brain", "arrow.left")
+            case .toolCall: return ("wrench.and.screwdriver", "arrow.right")
+            case .toolResult: return ("wrench.and.screwdriver", isError ? "exclamationmark.triangle" : "arrow.left")
+            case .tabOpen: return ("safari", "plus")
+            case .tabClose: return ("safari", "minus")
+            case .tabSwitch: return ("safari", "arrow.left.arrow.right")
+            case .pageLoad: return ("safari", "arrow.counterclockwise")
+            case .linkClick: return ("arrow.up.right.square", nil)
             }
         }
 

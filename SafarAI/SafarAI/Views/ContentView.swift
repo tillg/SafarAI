@@ -6,9 +6,13 @@ struct ContentView: View {
     @State private var isLoading = false
     @State private var faviconImage: NSImage?
     @State private var showingToolsPopover = false
+    @State private var eventPaneWidth: CGFloat = 250
 
     @Environment(ExtensionService.self) private var extensionService
     @Environment(AIService.self) private var aiService
+
+    private let minEventPaneWidth: CGFloat = 150
+    private let maxEventPaneWidth: CGFloat = 500
 
     var body: some View {
         HStack(spacing: 0) {
@@ -53,7 +57,8 @@ struct ContentView: View {
                 inputView
             }
 
-            Divider()
+            // Resizable divider
+            ResizableDivider(width: $eventPaneWidth, minWidth: minEventPaneWidth, maxWidth: maxEventPaneWidth)
 
             // Event timeline on the right
             EventTimelineView(
@@ -61,7 +66,7 @@ struct ContentView: View {
                 eventsLogURL: extensionService.eventsLogURL,
                 expandedEventIDs: extensionService.expandedEventIDs
             )
-            .frame(width: 250)
+            .frame(width: eventPaneWidth)
         }
         .onAppear {
             // Wire up tool executor
@@ -431,6 +436,45 @@ struct ContentView: View {
         }
 
         faviconImage = image
+    }
+}
+
+/// A draggable divider that allows resizing an adjacent pane
+struct ResizableDivider: View {
+    @Binding var width: CGFloat
+    let minWidth: CGFloat
+    let maxWidth: CGFloat
+
+    @State private var isDragging = false
+    @State private var dragStartWidth: CGFloat = 0
+
+    var body: some View {
+        Rectangle()
+            .fill(isDragging ? Color.accentColor.opacity(0.5) : Color(nsColor: .separatorColor))
+            .frame(width: isDragging ? 4 : 1)
+            .contentShape(Rectangle().inset(by: -3))  // Larger hit area
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if !isDragging {
+                            isDragging = true
+                            dragStartWidth = width
+                        }
+                        // Negative because dragging left should increase width (pane is on right)
+                        let newWidth = dragStartWidth - value.translation.width
+                        width = min(max(newWidth, minWidth), maxWidth)
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                    }
+            )
     }
 }
 

@@ -5,6 +5,11 @@ struct EventTimelineView: View {
     let eventsLogURL: URL
     var expandedEventIDs: Set<UUID> = []
 
+    /// Groups events by day for rendering with separators
+    private var eventsByDay: [(date: Date, events: [BrowserEvent])] {
+        EventTimelineHelpers.groupEventsByDay(events)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -52,12 +57,16 @@ struct EventTimelineView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 6) {
-                            ForEach(events) { event in
-                                EventCardView(
-                                    event: event,
-                                    initiallyExpanded: expandedEventIDs.contains(event.id)
-                                )
-                                .id(event.id)
+                            ForEach(Array(eventsByDay.enumerated()), id: \.element.date) { _, dayGroup in
+                                DaySeparatorView(date: dayGroup.date)
+
+                                ForEach(dayGroup.events) { event in
+                                    EventCardView(
+                                        event: event,
+                                        initiallyExpanded: expandedEventIDs.contains(event.id)
+                                    )
+                                    .id(event.id)
+                                }
                             }
                         }
                         .padding(8)
@@ -102,7 +111,33 @@ struct EventTimelineView: View {
     }
 }
 
-#Preview {
+/// Day separator shown between events from different days
+struct DaySeparatorView: View {
+    let date: Date
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(height: 1)
+
+            Text(formattedDate)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(height: 1)
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var formattedDate: String {
+        EventTimelineHelpers.formatDaySeparator(for: date)
+    }
+}
+
+#Preview("With Day Separators") {
     HStack(spacing: 0) {
         Color.blue.opacity(0.1)
             .frame(width: 300)
@@ -115,36 +150,68 @@ struct EventTimelineView: View {
 
         EventTimelineView(
             events: [
-            BrowserEvent(
-                timestamp: Date().addingTimeInterval(-600),
-                type: .tabOpen,
-                tabId: 120,
-                url: "https://apple.com",
-                title: "Apple"
-            ),
-            BrowserEvent(
-                timestamp: Date().addingTimeInterval(-300),
-                type: .tabSwitch,
-                tabId: 123,
-                url: "https://github.com",
-                title: "GitHub",
-                details: ["previousTabId": "122"]
-            ),
-            BrowserEvent(
-                timestamp: Date().addingTimeInterval(-60),
-                type: .pageLoad,
-                tabId: 124,
-                url: "https://anthropic.com",
-                title: "Anthropic"
-            ),
-            BrowserEvent(
-                timestamp: Date(),
-                type: .linkClick,
-                url: "https://example.com/page",
-                title: "Example Link",
-                details: ["currentUrl": "https://example.com"]
-            )
-        ],
+                // Events from 3 days ago
+                BrowserEvent(
+                    timestamp: Calendar.current.date(byAdding: .day, value: -3, to: Date())!.addingTimeInterval(-7200),
+                    type: .tabOpen,
+                    tabId: 100,
+                    url: "https://swift.org",
+                    title: "Swift.org"
+                ),
+                BrowserEvent(
+                    timestamp: Calendar.current.date(byAdding: .day, value: -3, to: Date())!.addingTimeInterval(-3600),
+                    type: .aiQuery,
+                    details: ["prompt": "What is Swift?"]
+                ),
+                // Events from yesterday
+                BrowserEvent(
+                    timestamp: Calendar.current.date(byAdding: .day, value: -1, to: Date())!.addingTimeInterval(-7200),
+                    type: .tabOpen,
+                    tabId: 110,
+                    url: "https://developer.apple.com",
+                    title: "Apple Developer"
+                ),
+                BrowserEvent(
+                    timestamp: Calendar.current.date(byAdding: .day, value: -1, to: Date())!.addingTimeInterval(-3600),
+                    type: .toolCall,
+                    details: ["tool": "get_page_content"]
+                ),
+                BrowserEvent(
+                    timestamp: Calendar.current.date(byAdding: .day, value: -1, to: Date())!.addingTimeInterval(-3500),
+                    type: .toolResult,
+                    details: ["result": "{\"error\": \"Timeout\"}"]
+                ),
+                // Events from today
+                BrowserEvent(
+                    timestamp: Date().addingTimeInterval(-600),
+                    type: .tabOpen,
+                    tabId: 120,
+                    url: "https://apple.com",
+                    title: "Apple"
+                ),
+                BrowserEvent(
+                    timestamp: Date().addingTimeInterval(-300),
+                    type: .tabSwitch,
+                    tabId: 123,
+                    url: "https://github.com",
+                    title: "GitHub",
+                    details: ["previousTabId": "122"]
+                ),
+                BrowserEvent(
+                    timestamp: Date().addingTimeInterval(-60),
+                    type: .pageLoad,
+                    tabId: 124,
+                    url: "https://anthropic.com",
+                    title: "Anthropic"
+                ),
+                BrowserEvent(
+                    timestamp: Date(),
+                    type: .linkClick,
+                    url: "https://example.com/page",
+                    title: "Example Link",
+                    details: ["currentUrl": "https://example.com"]
+                )
+            ],
             eventsLogURL: URL(fileURLWithPath: "/tmp/browser_events.log")
         )
         .frame(width: 250)

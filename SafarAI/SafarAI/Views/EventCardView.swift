@@ -18,8 +18,7 @@ struct EventCardView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header (always visible)
             HStack(spacing: 6) {
-                Text(event.type.icon(isError: isToolError))
-                    .font(.caption)
+                EventIconView(eventType: event.type, isError: isToolError)
 
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -154,9 +153,7 @@ struct EventCardView: View {
     }
 
     private var timeText: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: event.timestamp, relativeTo: Date())
+        EventTimelineHelpers.formatEventTime(for: event.timestamp)
     }
 
     private var isToolError: Bool {
@@ -231,6 +228,51 @@ struct EventCardView: View {
         window.center()
         window.makeKeyAndOrderFront(nil)
         window.isReleasedWhenClosed = false
+    }
+}
+
+/// Renders event icons using SF Symbols with a two-symbol approach (base + direction)
+struct EventIconView: View {
+    let eventType: BrowserEvent.EventType
+    var isError: Bool = false
+
+    var body: some View {
+        let icon = eventType.icon(isError: isError)
+
+        HStack(spacing: 1) {
+            Image(systemName: icon.base)
+                .font(.system(size: 10))
+                .foregroundStyle(iconColor)
+
+            if let direction = icon.direction {
+                Image(systemName: direction)
+                    .font(.system(size: 8))
+                    .foregroundStyle(directionColor)
+            }
+        }
+    }
+
+    private var iconColor: Color {
+        if isError {
+            return .red
+        }
+        switch eventType {
+        case .aiQuery, .aiResponse:
+            return .purple
+        case .toolCall, .toolResult:
+            return .orange
+        case .tabOpen, .tabClose, .tabSwitch, .pageLoad:
+            return .blue
+        case .linkClick:
+            return .secondary
+        }
+    }
+
+    private var directionColor: Color {
+        if isError {
+            return .red
+        }
+        return .secondary
     }
 }
 
@@ -613,33 +655,82 @@ struct ScreenshotWindowView: View {
     }
 }
 
-#Preview {
-    VStack(spacing: 8) {
-        EventCardView(event: BrowserEvent(
-            timestamp: Date().addingTimeInterval(-300),
-            type: .tabSwitch,
-            tabId: 123,
-            url: "https://github.com",
-            title: "GitHub",
-            details: ["previousTabId": "122"]
-        ))
+#Preview("All Event Types") {
+    ScrollView {
+        VStack(spacing: 8) {
+            // AI Events
+            EventCardView(event: BrowserEvent(
+                timestamp: Date().addingTimeInterval(-600),
+                type: .aiQuery,
+                details: ["prompt": "Summarize this page"]
+            ))
 
-        EventCardView(event: BrowserEvent(
-            timestamp: Date().addingTimeInterval(-60),
-            type: .pageLoad,
-            tabId: 124,
-            url: "https://anthropic.com",
-            title: "Anthropic"
-        ))
+            EventCardView(event: BrowserEvent(
+                timestamp: Date().addingTimeInterval(-590),
+                type: .aiResponse,
+                details: ["response": "This page discusses..."]
+            ))
 
-        EventCardView(event: BrowserEvent(
-            timestamp: Date(),
-            type: .linkClick,
-            url: "https://example.com/page",
-            title: "Example Link",
-            details: ["currentUrl": "https://example.com", "opensInNewTab": "false"]
-        ))
+            // Tool Events
+            EventCardView(event: BrowserEvent(
+                timestamp: Date().addingTimeInterval(-500),
+                type: .toolCall,
+                details: ["tool": "get_page_content"]
+            ))
+
+            EventCardView(event: BrowserEvent(
+                timestamp: Date().addingTimeInterval(-490),
+                type: .toolResult,
+                details: ["result": "{\"text\": \"Page content here\"}"]
+            ))
+
+            EventCardView(event: BrowserEvent(
+                timestamp: Date().addingTimeInterval(-480),
+                type: .toolResult,
+                details: ["result": "{\"error\": \"Failed to fetch\"}"]
+            ))
+
+            // Browser Events
+            EventCardView(event: BrowserEvent(
+                timestamp: Date().addingTimeInterval(-300),
+                type: .tabOpen,
+                tabId: 120,
+                url: "https://apple.com",
+                title: "Apple"
+            ))
+
+            EventCardView(event: BrowserEvent(
+                timestamp: Date().addingTimeInterval(-250),
+                type: .tabSwitch,
+                tabId: 123,
+                url: "https://github.com",
+                title: "GitHub",
+                details: ["previousTabId": "122"]
+            ))
+
+            EventCardView(event: BrowserEvent(
+                timestamp: Date().addingTimeInterval(-200),
+                type: .tabClose,
+                tabId: 120
+            ))
+
+            EventCardView(event: BrowserEvent(
+                timestamp: Date().addingTimeInterval(-60),
+                type: .pageLoad,
+                tabId: 124,
+                url: "https://anthropic.com",
+                title: "Anthropic"
+            ))
+
+            EventCardView(event: BrowserEvent(
+                timestamp: Date(),
+                type: .linkClick,
+                url: "https://example.com/page",
+                title: "Example Link",
+                details: ["currentUrl": "https://example.com", "opensInNewTab": "false"]
+            ))
+        }
+        .padding()
     }
-    .padding()
-    .frame(width: 300)
+    .frame(width: 300, height: 600)
 }
