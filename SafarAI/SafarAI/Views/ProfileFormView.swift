@@ -3,6 +3,7 @@ import SwiftUI
 struct ProfileFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AIService.self) private var aiService
+    @Environment(ModelLimitsService.self) private var modelLimitsService
 
     @State private var name: String
     @State private var baseURL: String
@@ -18,6 +19,7 @@ struct ProfileFormView: View {
     @State private var isFetchingModels: Bool = false
     @State private var connectionStatus: ConnectionStatus = .idle
     @State private var showManualModelEntry: Bool = false
+    @State private var showTokenLimitsHelp: Bool = false
 
     let profile: LLMProfile?
     let onSave: (LLMProfile, String) -> Void
@@ -143,7 +145,7 @@ struct ProfileFormView: View {
                     }
                 }
 
-                Section("Model Configuration") {
+                Section {
                     if !availableModels.isEmpty && !showManualModelEntry {
                         Picker("Model", selection: $selectedModel) {
                             if selectedModel.isEmpty {
@@ -179,6 +181,11 @@ struct ProfileFormView: View {
                             .foregroundStyle(.secondary)
                     }
 
+                    // Model limit status (color-coded feedback)
+                    if !selectedModel.isEmpty {
+                        modelLimitStatusView
+                    }
+
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text("Max Tokens:")
@@ -186,7 +193,7 @@ struct ProfileFormView: View {
                             Text("\(maxTokens)")
                                 .foregroundStyle(.secondary)
 
-                            if let limit = getModelTokenLimit(selectedModel) {
+                            if let limit = modelLimitsService.getOutputLimit(selectedModel) {
                                 Button("Set to max") {
                                     maxTokens = limit
                                 }
@@ -200,24 +207,7 @@ struct ProfileFormView: View {
                             set: { maxTokens = Int($0) }
                         ), in: 256...32768, step: 256)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Maximum tokens for response (default: 4096)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            if !selectedModel.isEmpty {
-                                if let limit = getModelTokenLimit(selectedModel) {
-                                    Text("Note: \(selectedModel) supports up to \(limit) completion tokens")
-                                        .font(.caption)
-                                        .foregroundStyle(maxTokens > limit ? .orange : .green)
-                                        .fontWeight(.medium)
-                                } else {
-                                    Text("Check your provider's docs for \(selectedModel)'s token limits")
-                                        .font(.caption)
-                                        .foregroundStyle(.orange)
-                                }
-                            }
-                        }
+                        maxTokensStatusText
                     }
 
                     Divider()
@@ -229,7 +219,7 @@ struct ProfileFormView: View {
                             Text("\(contextLimit)")
                                 .foregroundStyle(.secondary)
 
-                            if let limit = getModelContextLimit(selectedModel) {
+                            if let limit = modelLimitsService.getContextLimit(selectedModel) {
                                 Button("Set to model default") {
                                     contextLimit = limit
                                 }
@@ -243,23 +233,26 @@ struct ProfileFormView: View {
                             set: { contextLimit = Int($0) }
                         ), in: 1024...131072, step: 1024)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Total context window size (input + output tokens)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        contextLimitStatusText
+                    }
 
-                            if !selectedModel.isEmpty {
-                                if let limit = getModelContextLimit(selectedModel) {
-                                    Text("Note: \(selectedModel) has \(limit) token context window")
-                                        .font(.caption)
-                                        .foregroundStyle(contextLimit == limit ? .green : .orange)
-                                        .fontWeight(.medium)
-                                } else {
-                                    Text("Check your provider's docs for \(selectedModel)'s context limit")
-                                        .font(.caption)
-                                        .foregroundStyle(.orange)
-                                }
-                            }
+                    // Truncation info
+                    Text("When page content exceeds available space, it will be truncated. Longer pages may lose content at the end.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 4)
+                } header: {
+                    HStack {
+                        Text("Model Configuration")
+                        Button {
+                            showTokenLimitsHelp = true
+                        } label: {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $showTokenLimitsHelp, arrowEdge: .trailing) {
+                            tokenLimitsHelpPopover
                         }
                     }
                 }
@@ -399,92 +392,131 @@ struct ProfileFormView: View {
         }
     }
 
-    /// Get known token limits for common models
-    private func getModelTokenLimit(_ model: String) -> Int? {
-        let modelLower = model.lowercased()
+    // MARK: - Token Limits Help Views
 
-        // OpenAI models
-        if modelLower.contains("gpt-4o") {
-            return 16384
-        } else if modelLower.contains("gpt-4-turbo") || modelLower.contains("gpt-4-1106") || modelLower.contains("gpt-4-0125") {
-            return 4096
-        } else if modelLower.contains("gpt-4-32k") {
-            return 32768
-        } else if modelLower.contains("gpt-4") {
-            return 8192
-        } else if modelLower.contains("gpt-3.5-turbo-16k") {
-            return 16384
-        } else if modelLower.contains("gpt-3.5-turbo") {
-            return 4096
+    /// Help popover explaining token limits
+    private var tokenLimitsHelpPopover: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Understanding Token Limits")
+                .font(.headline)
+
+            Image("TokenExplanation")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 500)
+
+            Text("If input + output exceeds the context window, the request will fail or content will be truncated.")
+                .font(.callout)
+
+            Text("**Example**: GPT-4o has 128K context and 16K max output. If you use 120K for input, only 8K remains for the response.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
-
-        // Anthropic models (via OpenRouter/Together)
-        else if modelLower.contains("claude-3-5-sonnet") || modelLower.contains("claude-3-opus") || modelLower.contains("claude-3-sonnet") {
-            return 4096
-        } else if modelLower.contains("claude-2") {
-            return 4096
-        }
-
-        // Groq models (fast inference)
-        else if modelLower.contains("mixtral") || modelLower.contains("llama") {
-            return 8192
-        }
-
-        // Gemini models
-        else if modelLower.contains("gemini-pro") {
-            return 8192
-        }
-
-        return nil
+        .padding()
+        .frame(width: 540)
     }
 
-    /// Get known context window limits for common models
-    private func getModelContextLimit(_ model: String) -> Int? {
-        let modelLower = model.lowercased()
+    /// Color-coded model limit status view
+    @ViewBuilder
+    private var modelLimitStatusView: some View {
+        let result = modelLimitsService.findModel(selectedModel)
 
-        // OpenAI models
-        if modelLower.contains("gpt-4o") {
-            return 128000
-        } else if modelLower.contains("gpt-4-turbo") || modelLower.contains("gpt-4-1106") || modelLower.contains("gpt-4-0125") {
-            return 128000
-        } else if modelLower.contains("gpt-4-32k") {
-            return 32768
-        } else if modelLower.contains("gpt-4") {
-            return 8192
-        } else if modelLower.contains("gpt-3.5-turbo-16k") {
-            return 16384
-        } else if modelLower.contains("gpt-3.5-turbo") {
-            return 16385
+        switch result {
+        case .known(let context, let output, _):
+            let contextExceeded = contextLimit > context
+            let outputExceeded = maxTokens > output
+
+            if contextExceeded || outputExceeded {
+                // Red: Exceeds known limits
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    if contextExceeded {
+                        Text("Exceeds \(selectedModel) limit (\(formatTokens(context)) context)")
+                    } else {
+                        Text("Exceeds \(selectedModel) limit (\(formatTokens(output)) output)")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.red)
+                .fontWeight(.medium)
+            } else {
+                // Green: Within known limits
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("\(selectedModel): \(formatTokens(context)) context, \(formatTokens(output)) output")
+                }
+                .font(.caption)
+                .foregroundStyle(.green)
+                .fontWeight(.medium)
+            }
+
+        case .unknown:
+            // Orange: Unknown model
+            HStack(spacing: 6) {
+                Image(systemName: "questionmark.circle.fill")
+                    .foregroundStyle(.orange)
+                Text("Unknown model. Verify limits with your provider.")
+            }
+            .font(.caption)
+            .foregroundStyle(.orange)
+            .fontWeight(.medium)
         }
+    }
 
-        // Anthropic models (via OpenRouter/Together)
-        else if modelLower.contains("claude-3") {
-            return 200000
-        } else if modelLower.contains("claude-2") {
-            return 100000
+    /// Status text for max tokens slider
+    @ViewBuilder
+    private var maxTokensStatusText: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Maximum tokens for response (default: 4096)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if !selectedModel.isEmpty {
+                if let limit = modelLimitsService.getOutputLimit(selectedModel) {
+                    Text("\(selectedModel) supports up to \(formatTokens(limit)) output tokens")
+                        .font(.caption)
+                        .foregroundStyle(maxTokens > limit ? .red : .green)
+                        .fontWeight(.medium)
+                }
+            }
         }
+    }
 
-        // Groq models
-        else if modelLower.contains("mixtral") {
-            return 32768
-        } else if modelLower.contains("llama-3") {
-            return 8192
-        } else if modelLower.contains("llama-2") {
-            return 4096
+    /// Status text for context limit slider
+    @ViewBuilder
+    private var contextLimitStatusText: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Total context window size (input + output tokens)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if !selectedModel.isEmpty {
+                if let limit = modelLimitsService.getContextLimit(selectedModel) {
+                    Text("\(selectedModel) has \(formatTokens(limit)) context window")
+                        .font(.caption)
+                        .foregroundStyle(contextLimit > limit ? .red : .green)
+                        .fontWeight(.medium)
+                }
+            }
         }
+    }
 
-        // Gemini models
-        else if modelLower.contains("gemini-1.5") {
-            return 1000000
-        } else if modelLower.contains("gemini-pro") {
-            return 32768
+    /// Format token count for display (e.g., 128000 -> "128K")
+    private func formatTokens(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return "\(count / 1_000_000)M"
+        } else if count >= 1000 {
+            return "\(count / 1000)K"
+        } else {
+            return "\(count)"
         }
-
-        return nil
     }
 }
 
 #Preview {
     ProfileFormView { _, _ in }
         .environment(AIService())
+        .environment(ModelLimitsService())
 }

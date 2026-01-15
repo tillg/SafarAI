@@ -4,12 +4,14 @@ import SwiftUI
 struct SafarAIApp: App {
     @State private var extensionService = ExtensionService()
     @State private var aiService = AIService()
+    @State private var modelLimitsService = ModelLimitsService()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(extensionService)
                 .environment(aiService)
+                .environment(modelLimitsService)
                 .frame(minWidth: 400, idealWidth: 450, minHeight: 500, idealHeight: 600)
         }
         .windowStyle(.hiddenTitleBar)
@@ -44,6 +46,7 @@ struct SafarAIApp: App {
             SettingsView()
                 .environment(aiService)
                 .environment(extensionService)
+                .environment(modelLimitsService)
                 .frame(minWidth: 600, minHeight: 500)
         }
         .windowResizability(.contentSize)
